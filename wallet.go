@@ -4,12 +4,15 @@ import (
 	"net/http"
 )
 
-func (b *Client) Withdraw(asset, network, address string, amount float64) (*WithdrawResponse, error) {
+func (b *Client) Withdraw(asset, network, address, tag string, amount float64) (*WithdrawResponse, error) {
 	opts := WithdrawOpts{
 		Asset:   asset,
 		Network: network,
 		Address: address,
 		Amount:  amount,
+	}
+	if tag != "" {
+		opts.Tag = tag
 	}
 	res, err := b.do("spot", http.MethodPost, "wapi/v3/withdraw.html", opts, true, false) //margin
 	if err != nil {
@@ -28,6 +31,7 @@ type WithdrawOpts struct {
 	Network string  `url:"network"`
 	Address string  `url:"address"`
 	Amount  float64 `url:"amount"`
+	Tag     string  `url:"addressTag, omitempty"`
 }
 
 type WithdrawResponse struct {
