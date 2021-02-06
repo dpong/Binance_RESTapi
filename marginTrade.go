@@ -5,6 +5,16 @@ import (
 	"strings"
 )
 
+type PlaceOrderOptsIsomargin struct {
+	Symbol      string  `url:"symbol"`
+	Price       float64 `url:"price"`
+	Qty         float64 `url:"quantity"`
+	TimeInForce string  `url:"timeInForce"`
+	Type        string  `url:"type"`
+	Side        string  `url:"side"`
+	Isolated    string  `url:"isIsolated, omitempty"`
+}
+
 func (b *Client) MarginPlaceOrder(symbol, side string, price, size float64, orderType, timeInforce, isolated string) (*MarginOrderResponse, error) {
 	uside := strings.ToUpper(side)
 	utype := strings.ToUpper(orderType)
@@ -14,7 +24,7 @@ func (b *Client) MarginPlaceOrder(symbol, side string, price, size float64, orde
 	} else {
 		utif = strings.ToUpper(timeInforce)
 	}
-	opts := PlaceOrderOpts{
+	opts := PlaceOrderOptsIsomargin{
 		Symbol:      symbol,
 		Side:        uside,
 		Price:       price,

@@ -5,7 +5,17 @@ import (
 	"strings"
 )
 
-func (b *Client) FuturePlaceOrder(symbol, side string, price, size float64, orderType, timeInforce string) (*FutureOrderResponse, error) {
+type PlaceOrderOptsFuture struct {
+	Symbol      string  `url:"symbol"`
+	Price       float64 `url:"price"`
+	Qty         float64 `url:"quantity"`
+	TimeInForce string  `url:"timeInForce"`
+	Type        string  `url:"type"`
+	Side        string  `url:"side"`
+	ReduceOnly  string  `url:"reduceOnly"`
+}
+
+func (b *Client) FuturePlaceOrder(symbol, side string, price, size float64, orderType, timeInforce, reduceOnly string) (*FutureOrderResponse, error) {
 	uside := strings.ToUpper(side)
 	utype := strings.ToUpper(orderType)
 	var utif string
@@ -14,13 +24,14 @@ func (b *Client) FuturePlaceOrder(symbol, side string, price, size float64, orde
 	} else {
 		utif = strings.ToUpper(timeInforce)
 	}
-	opts := PlaceOrderOpts{
+	opts := PlaceOrderOptsFuture{
 		Symbol:      symbol,
 		Side:        uside,
 		Price:       price,
 		Qty:         size,
 		Type:        utype,
 		TimeInForce: utif,
+		ReduceOnly:  reduceOnly,
 	}
 	res, err := b.do("future", http.MethodPost, "fapi/v1/order", opts, true, false)
 	if err != nil {

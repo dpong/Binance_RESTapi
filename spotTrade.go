@@ -14,7 +14,7 @@ func (b *Client) SpotPlaceOrder(symbol, side string, price, size float64, orderT
 	} else {
 		utif = strings.ToUpper(timeInforce)
 	}
-	opts := PlaceOrderOpts1{
+	opts := PlaceOrderOpts{
 		Symbol:      symbol,
 		Side:        uside,
 		Price:       price,
@@ -34,17 +34,8 @@ func (b *Client) SpotPlaceOrder(symbol, side string, price, size float64, orderT
 	return resp, nil
 }
 
-type PlaceOrderOpts struct {
-	Symbol      string  `url:"symbol"`
-	Price       float64 `url:"price"`
-	Qty         float64 `url:"quantity"`
-	TimeInForce string  `url:"timeInForce"`
-	Type        string  `url:"type"`
-	Side        string  `url:"side"`
-	Isolated    string  `url:"isIsolated, omitempty"`
-}
 
-type PlaceOrderOpts1 struct {
+type PlaceOrderOpts struct {
 	Symbol      string  `url:"symbol"`
 	Price       float64 `url:"price"`
 	Qty         float64 `url:"quantity"`

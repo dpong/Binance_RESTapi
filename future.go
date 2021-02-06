@@ -144,6 +144,21 @@ type AssetsInAccount struct {
 	MaxWithdrawAmount      string `json:"maxWithdrawAmount"`
 }
 
+type PositionsInAccount struct {
+	Symbol                 string `json:"symbol"`
+	InitialMargin          string `json:"initialMargin"`
+	MaintMargin            string `json:"maintMargin"`
+	UnrealizedProfit       string `json:"unrealizedProfit"`
+	PositionInitialMargin  string `json:"positionInitialMargin"`
+	OpenOrderInitialMargin string `json:"openOrderInitialMargin"`
+	Leverage               string `json:"leverage"`
+	Isolated               bool   `json:"isolated"`
+	EntryPrice             string `json:"entryPrice"`
+	MaxNotional            string `json:"maxNotional"`
+	PositionSide           string `json:"positionSide"`
+	PositionAmt            string `json:"positionAmt"`
+}
+
 type SwapPositionResponse struct {
 	EntryPrice       string `json:"entryPrice"`
 	MarginType       string `json:"marginType"`
@@ -185,4 +200,63 @@ type SwapOpenInterestResponse struct {
 	OpenInterest string `json:"openInterest"`
 	Symbol       string `json:"symbol"`
 	Time         int64  `json:"time"`
+}
+
+func (b *Client) SwapNotionalandLeverage() (*[]NotionalandLeverage, error) {
+	res, err := b.do("future", http.MethodGet, "/fapi/v1/leverageBracket", nil, true, false)
+	if err != nil {
+		return nil, err
+	}
+	resp := []NotionalandLeverage{}
+	err = json.Unmarshal(res, &resp)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+type NotionalandLeverage struct {
+	Symbol   string     `json:"symbol"`
+	Brackets []Brackets `json:"brackets"`
+}
+
+type Brackets struct {
+	Bracket          int     `json:"bracket"`
+	InitialLeverage  int     `json:"initialLeverage"`
+	NotionalCap      int     `json:"notionalCap"`
+	NotionalFloor    int     `json:"notionalFloor"`
+	MaintMarginRatio float64 `json:"maintMarginRatio"`
+	Cum              int     `json:"cum"`
+}
+
+func (b *Client) SwapChangeInitialLeverage(symbol string, leverage int) (*ChangeLeverageResponse, error) {
+	opts := ChnageLeverageOpts{
+		Symbol:   symbol,
+		Leverage: leverage,
+	}
+	res, err := b.do("future", http.MethodPost, "/fapi/v1/leverage", opts, true, false)
+	if err != nil {
+		return nil, err
+	}
+	resp := &ChangeLeverageResponse{}
+	err = json.Unmarshal(res, resp)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+type ChnageLeverageOpts struct {
+	Symbol   string `json:"json"`
+	Leverage int    `json:"leverage"`
+}
+
+type ChangeLeverageResponse struct {
+	Leverage         int    `json:"leverage"`
+	MaxNotionalValue string `json:"maxNotionalValue"`
+	Symbol           string `json:"symbol"`
 }
