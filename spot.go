@@ -16,20 +16,21 @@ func (b *Client) SpotAccount() (*SpotAccountResponse, error) {
 }
 
 type SpotAccountResponse struct {
-	MakerCommission  int    `json:"makerCommission"`
-	TakerCommission  int    `json:"takerCommission"`
-	BuyerCommission  int    `json:"buyerCommission"`
-	SellerCommission int    `json:"sellerCommission"`
-	CanTrade         bool   `json:"canTrade"`
-	CanWithdraw      bool   `json:"canWithdraw"`
-	CanDeposit       bool   `json:"canDeposit"`
-	UpdateTime       int    `json:"updateTime"`
-	AccountType      string `json:"accountType"`
-	Balances         []struct {
-		Asset  string `json:"asset"`
-		Free   string `json:"free"`
-		Locked string `json:"locked"`
-	} `json:"balances"`
-	Permissions []string `json:"permissions"`
+	MakerCommission  int                   `json:"makerCommission"`
+	TakerCommission  int                   `json:"takerCommission"`
+	BuyerCommission  int                   `json:"buyerCommission"`
+	SellerCommission int                   `json:"sellerCommission"`
+	CanTrade         bool                  `json:"canTrade"`
+	CanWithdraw      bool                  `json:"canWithdraw"`
+	CanDeposit       bool                  `json:"canDeposit"`
+	UpdateTime       int                   `json:"updateTime"`
+	AccountType      string                `json:"accountType"`
+	Balances         []SpotAccountBalances `json:"balances"`
+	Permissions      []string              `json:"permissions"`
 }
 
+type SpotAccountBalances struct {
+	Asset  string `json:"asset"`
+	Free   string `json:"free"`
+	Locked string `json:"locked"`
+}

@@ -109,24 +109,24 @@ func (b *Client) SwapPositions() ([]*SwapPositionResponse, error) {
 }
 
 type SwapAccountResponse struct {
-	FeeTier                     int               `json:"feeTier"`
-	CanTrade                    bool              `json:"canTrade"`
-	CanDeposit                  bool              `json:"canDeposit"`
-	CanWithdraw                 bool              `json:"canWithdraw"`
-	UpdateTime                  int64             `json:"updateTime"`
-	TotalInitialMargin          string            `json:"totalInitialMargin"`
-	TotalMaintMargin            string            `json:"totalMaintMargin"`
-	TotalWalletBalance          string            `json:"totalWalletBalance"`
-	TotalUnrealizedProfit       string            `json:"totalUnrealizedProfit"`
-	TotalMarginBalance          string            `json:"totalMarginBalance"`
-	TotalPositionInitialMargin  string            `json:"totalPositionInitialMargin"`
-	TotalOpenOrderInitialMargin string            `json:"totalOpenOrderInitialMargin"`
-	TotalCrossWalletBalance     string            `json:"totalCrossWalletBalance"`
-	TotalCrossUnPnl             string            `json:"totalCrossUnPnl"`
-	AvailableBalance            string            `json:"availableBalance"`
-	MaxWithdrawAmount           string            `json:"maxWithdrawAmount"`
-	Assets                      []AssetsInAccount `json:"assets"`
-	//Positions                   []PositionsInAccount `json:"positions"`
+	FeeTier                     int                  `json:"feeTier"`
+	CanTrade                    bool                 `json:"canTrade"`
+	CanDeposit                  bool                 `json:"canDeposit"`
+	CanWithdraw                 bool                 `json:"canWithdraw"`
+	UpdateTime                  int64                `json:"updateTime"`
+	TotalInitialMargin          string               `json:"totalInitialMargin"`
+	TotalMaintMargin            string               `json:"totalMaintMargin"`
+	TotalWalletBalance          string               `json:"totalWalletBalance"`
+	TotalUnrealizedProfit       string               `json:"totalUnrealizedProfit"`
+	TotalMarginBalance          string               `json:"totalMarginBalance"`
+	TotalPositionInitialMargin  string               `json:"totalPositionInitialMargin"`
+	TotalOpenOrderInitialMargin string               `json:"totalOpenOrderInitialMargin"`
+	TotalCrossWalletBalance     string               `json:"totalCrossWalletBalance"`
+	TotalCrossUnPnl             string               `json:"totalCrossUnPnl"`
+	AvailableBalance            string               `json:"availableBalance"`
+	MaxWithdrawAmount           string               `json:"maxWithdrawAmount"`
+	Assets                      []AssetsInAccount    `json:"assets"`
+	Positions                   []PositionsInAccount `json:"positions"`
 }
 
 type AssetsInAccount struct {
