@@ -113,45 +113,6 @@ func (b *Client) SpotCancelOrder(symbol string, oid int) (*SpotCancelOrderRespon
 	return resp, nil
 }
 
-func (b *Client) SpotOpenOrder(symbol string, oid int) (*SpotOpenOrderResponse, error) {
-	usymbol := strings.ToUpper(symbol)
-	opts := SpotOIDOpts{
-		Symbol: usymbol,
-		Oid:    oid,
-	}
-	res, err := b.do("spot", http.MethodGet, "api/v3/order", opts, true, false)
-	if err != nil {
-		return nil, err
-	}
-	resp := &SpotOpenOrderResponse{}
-	err = json.Unmarshal(res, resp)
-	if err != nil {
-		return nil, err
-	}
-	return resp, nil
-}
-
-type SpotOpenOrderResponse struct {
-	Symbol              string `json:"symbol"`
-	OrderID             int    `json:"orderId"`
-	OrderListID         int    `json:"orderListId"`
-	ClientOrderID       string `json:"clientOrderId"`
-	Price               string `json:"price"`
-	OrigQty             string `json:"origQty"`
-	ExecutedQty         string `json:"executedQty"`
-	CummulativeQuoteQty string `json:"cummulativeQuoteQty"`
-	Status              string `json:"status"`
-	TimeInForce         string `json:"timeInForce"`
-	Type                string `json:"type"`
-	Side                string `json:"side"`
-	StopPrice           string `json:"stopPrice"`
-	IcebergQty          string `json:"icebergQty"`
-	Time                int64  `json:"time"`
-	UpdateTime          int64  `json:"updateTime"`
-	IsWorking           bool   `json:"isWorking"`
-	OrigQuoteOrderQty   string `json:"origQuoteOrderQty"`
-}
-
 type SpotOIDOpts struct {
 	Symbol string `url:"symbol"`
 	Oid    int    `url:"orderId"`
@@ -177,4 +138,43 @@ type SpotCancelOrderResponse struct {
 	TimeInForce         string `json:"timeInForce"`
 	Type                string `json:"type"`
 	Side                string `json:"side"`
+}
+
+type SpotQueryOrderResponse struct {
+	Symbol              string `json:"symbol"`
+	OrderID             int    `json:"orderId"`
+	OrderListID         int    `json:"orderListId"`
+	ClientOrderID       string `json:"clientOrderId"`
+	Price               string `json:"price"`
+	OrigQty             string `json:"origQty"`
+	ExecutedQty         string `json:"executedQty"`
+	CummulativeQuoteQty string `json:"cummulativeQuoteQty"`
+	Status              string `json:"status"`
+	TimeInForce         string `json:"timeInForce"`
+	Type                string `json:"type"`
+	Side                string `json:"side"`
+	StopPrice           string `json:"stopPrice"`
+	IcebergQty          string `json:"icebergQty"`
+	Time                int64  `json:"time"`
+	UpdateTime          int64  `json:"updateTime"`
+	IsWorking           bool   `json:"isWorking"`
+	OrigQuoteOrderQty   string `json:"origQuoteOrderQty"`
+}
+
+func (b *Client) SpotQueryOrder(symbol string, oid int) (*SpotQueryOrderResponse, error) {
+	usymbol := strings.ToUpper(symbol)
+	opts := SpotOIDOpts{
+		Symbol: usymbol,
+		Oid:    oid,
+	}
+	res, err := b.do("spot", http.MethodGet, "api/v3/order", opts, true, false)
+	if err != nil {
+		return nil, err
+	}
+	resp := &SpotQueryOrderResponse{}
+	err = json.Unmarshal(res, resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
