@@ -15,7 +15,37 @@ type PlaceOrderOptsFuture struct {
 	ReduceOnly  string  `url:"reduceOnly"`
 }
 
+type PlaceOrderOptsFutureMarket struct {
+	Symbol string  `url:"symbol"`
+	Qty    float64 `url:"quantity"`
+	Type   string  `url:"type"`
+	Side   string  `url:"side"`
+}
+
+func (b *Client) FuturePlaceOrderMarket(symbol, side string, size float64, orderType, reduceOnly string) (*FutureOrderResponse, error) {
+	usymbol := strings.ToUpper(symbol)
+	uside := strings.ToUpper(side)
+	utype := strings.ToUpper(orderType)
+	opts := PlaceOrderOptsFutureMarket{
+		Symbol: usymbol,
+		Side:   uside,
+		Qty:    size,
+		Type:   utype,
+	}
+	res, err := b.do("future", http.MethodPost, "fapi/v1/order", opts, true, false)
+	if err != nil {
+		return nil, err
+	}
+	resp := &FutureOrderResponse{}
+	err = json.Unmarshal(res, resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 func (b *Client) FuturePlaceOrder(symbol, side string, price, size float64, orderType, timeInforce, reduceOnly string) (*FutureOrderResponse, error) {
+	usymbol := strings.ToUpper(symbol)
 	uside := strings.ToUpper(side)
 	utype := strings.ToUpper(orderType)
 	var utif string
@@ -25,7 +55,7 @@ func (b *Client) FuturePlaceOrder(symbol, side string, price, size float64, orde
 		utif = strings.ToUpper(timeInforce)
 	}
 	opts := PlaceOrderOptsFuture{
-		Symbol:      symbol,
+		Symbol:      usymbol,
 		Side:        uside,
 		Price:       price,
 		Qty:         size,
@@ -71,8 +101,9 @@ type FutureOrderResponse struct {
 }
 
 func (b *Client) FutureCancelOrder(symbol string, oid int) (*FutureOrderResponse, error) {
+	usymbol := strings.ToUpper(symbol)
 	opts := OIDOpts{
-		Symbol: symbol,
+		Symbol: usymbol,
 		Oid:    oid,
 	}
 	res, err := b.do("future", http.MethodDelete, "fapi/v1/order", opts, true, false)
@@ -88,8 +119,9 @@ func (b *Client) FutureCancelOrder(symbol string, oid int) (*FutureOrderResponse
 }
 
 func (b *Client) FutureOpenOrder(symbol string, oid int) (*FutureOrderResponse, error) {
+	usymbol := strings.ToUpper(symbol)
 	opts := OIDOpts{
-		Symbol: symbol,
+		Symbol: usymbol,
 		Oid:    oid,
 	}
 	res, err := b.do("future", http.MethodGet, "fapi/v1/openOrder", opts, true, false)

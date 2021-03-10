@@ -6,6 +6,7 @@ import (
 )
 
 func (b *Client) SpotPlaceOrder(symbol, side string, price, size float64, orderType, timeInforce string) (*SpotOrderResponse, error) {
+	usymbol := strings.ToUpper(symbol)
 	uside := strings.ToUpper(side)
 	utype := strings.ToUpper(orderType)
 	var utif string
@@ -15,7 +16,7 @@ func (b *Client) SpotPlaceOrder(symbol, side string, price, size float64, orderT
 		utif = strings.ToUpper(timeInforce)
 	}
 	opts := PlaceOrderOpts{
-		Symbol:      symbol,
+		Symbol:      usymbol,
 		Side:        uside,
 		Price:       price,
 		Qty:         size,
@@ -34,6 +35,27 @@ func (b *Client) SpotPlaceOrder(symbol, side string, price, size float64, orderT
 	return resp, nil
 }
 
+func (b *Client) SpotPlaceOrderMarket(symbol, side string, size float64, orderType string) (*SpotOrderResponse, error) {
+	usymbol := strings.ToUpper(symbol)
+	uside := strings.ToUpper(side)
+	utype := strings.ToUpper(orderType)
+	opts := PlaceOrderOptsMarket{
+		Symbol: usymbol,
+		Side:   uside,
+		Qty:    size,
+		Type:   utype,
+	}
+	res, err := b.do("spot", http.MethodPost, "api/v3/order", opts, true, false)
+	if err != nil {
+		return nil, err
+	}
+	resp := &SpotOrderResponse{}
+	err = json.Unmarshal(res, resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
 
 type PlaceOrderOpts struct {
 	Symbol      string  `url:"symbol"`
@@ -42,6 +64,13 @@ type PlaceOrderOpts struct {
 	TimeInForce string  `url:"timeInForce"`
 	Type        string  `url:"type"`
 	Side        string  `url:"side"`
+}
+
+type PlaceOrderOptsMarket struct {
+	Symbol string  `url:"symbol"`
+	Qty    float64 `url:"quantity"`
+	Type   string  `url:"type"`
+	Side   string  `url:"side"`
 }
 
 type SpotOrderResponse struct {
@@ -67,8 +96,9 @@ type SpotOrderResponse struct {
 }
 
 func (b *Client) SpotCancelOrder(symbol string, oid int) (*SpotCancelOrderResponse, error) {
+	usymbol := strings.ToUpper(symbol)
 	opts := SpotOIDOpts{
-		Symbol: symbol,
+		Symbol: usymbol,
 		Oid:    oid,
 	}
 	res, err := b.do("spot", http.MethodDelete, "api/v3/order", opts, true, false)
@@ -84,8 +114,9 @@ func (b *Client) SpotCancelOrder(symbol string, oid int) (*SpotCancelOrderRespon
 }
 
 func (b *Client) SpotOpenOrder(symbol string, oid int) (*SpotOpenOrderResponse, error) {
+	usymbol := strings.ToUpper(symbol)
 	opts := SpotOIDOpts{
-		Symbol: symbol,
+		Symbol: usymbol,
 		Oid:    oid,
 	}
 	res, err := b.do("spot", http.MethodGet, "api/v3/order", opts, true, false)
