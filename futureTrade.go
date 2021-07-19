@@ -16,21 +16,27 @@ type PlaceOrderOptsFuture struct {
 }
 
 type PlaceOrderOptsFutureMarket struct {
-	Symbol string  `url:"symbol"`
-	Qty    float64 `url:"quantity"`
-	Type   string  `url:"type"`
-	Side   string  `url:"side"`
+	Symbol     string  `url:"symbol"`
+	Qty        float64 `url:"quantity"`
+	Type       string  `url:"type"`
+	Side       string  `url:"side"`
+	ReduceOnly string  `url:"reduceOnly"`
+	ClientID   string  `url:"newClientOrderId, omitempty"`
 }
 
-func (b *Client) FuturePlaceOrderMarket(symbol, side string, size float64, orderType, reduceOnly string) (*FutureOrderResponse, error) {
+func (b *Client) FuturePlaceOrderMarket(symbol, side string, size float64, orderType, reduceOnly string, clientID string) (*FutureOrderResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	uside := strings.ToUpper(side)
 	utype := strings.ToUpper(orderType)
 	opts := PlaceOrderOptsFutureMarket{
-		Symbol: usymbol,
-		Side:   uside,
-		Qty:    size,
-		Type:   utype,
+		Symbol:     usymbol,
+		Side:       uside,
+		Qty:        size,
+		Type:       utype,
+		ReduceOnly: reduceOnly,
+	}
+	if clientID != "" {
+		opts.ClientID = clientID
 	}
 	res, err := b.do("future", http.MethodPost, "fapi/v1/order", opts, true, false)
 	if err != nil {

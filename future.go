@@ -228,7 +228,7 @@ type Brackets struct {
 	NotionalCap      int     `json:"notionalCap"`
 	NotionalFloor    int     `json:"notionalFloor"`
 	MaintMarginRatio float64 `json:"maintMarginRatio"`
-	Cum              int     `json:"cum"`
+	Cum              float64 `json:"cum"`
 }
 
 func (b *Client) SwapChangeInitialLeverage(symbol string, leverage int) (*ChangeLeverageResponse, error) {
