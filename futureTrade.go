@@ -24,15 +24,14 @@ type PlaceOrderOptsFutureMarket struct {
 	ClientID   string  `url:"newClientOrderId, omitempty"`
 }
 
-func (b *Client) FuturePlaceOrderMarket(symbol, side string, size float64, orderType, reduceOnly string, clientID string) (*FutureOrderResponse, error) {
+func (b *Client) FuturePlaceOrderMarket(symbol, side string, size float64, reduceOnly, clientID string) (*FutureOrderResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	uside := strings.ToUpper(side)
-	utype := strings.ToUpper(orderType)
 	opts := PlaceOrderOptsFutureMarket{
 		Symbol:     usymbol,
 		Side:       uside,
 		Qty:        size,
-		Type:       utype,
+		Type:       "market",
 		ReduceOnly: reduceOnly,
 	}
 	if clientID != "" {
