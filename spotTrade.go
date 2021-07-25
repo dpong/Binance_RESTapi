@@ -42,7 +42,7 @@ func (b *Client) SpotPlaceOrderMarket(symbol, side string, size float64, clientI
 		Symbol: usymbol,
 		Side:   uside,
 		Qty:    size,
-		Type:   "market",
+		Type:   "MARKET",
 	}
 	res, err := b.do("spot", http.MethodPost, "api/v3/order", opts, true, false)
 	if err != nil {

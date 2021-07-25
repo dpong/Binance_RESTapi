@@ -31,7 +31,7 @@ func (b *Client) FuturePlaceOrderMarket(symbol, side string, size float64, reduc
 		Symbol:     usymbol,
 		Side:       uside,
 		Qty:        size,
-		Type:       "market",
+		Type:       "MARKET",
 		ReduceOnly: reduceOnly,
 	}
 	if clientID != "" {
