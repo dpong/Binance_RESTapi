@@ -70,7 +70,7 @@ type PlaceOrderOptsMarket struct {
 	Qty      float64 `url:"quantity"`
 	Type     string  `url:"type"`
 	Side     string  `url:"side"`
-	ClientID string  `url:"newClientOrderId, omitempty"`
+	ClientID string  `url:"newClientOrderId,omitempty"`
 }
 
 type SpotOrderResponse struct {
