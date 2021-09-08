@@ -9,13 +9,14 @@ type DepthOpts struct {
 	Limit  int    `url:"limit"`
 }
 
+// Valid limits:[5, 10, 20, 50, 100, 500, 1000, 5000]
 func (b *Client) SpotDepth(symbol string, limit int) (*Depth, error) {
 	opts := DepthOpts{
 		Symbol: symbol,
 		Limit:  limit,
 	}
-	if opts.Limit == 0 || opts.Limit > 100 {
-		opts.Limit = 100
+	if opts.Limit == 0 || opts.Limit > 5000 {
+		opts.Limit = 5000
 	}
 	res, err := b.do("spot", http.MethodGet, "api/v3/depth", opts, false, false)
 	if err != nil {
