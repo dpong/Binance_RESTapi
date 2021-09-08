@@ -108,3 +108,22 @@ func (b *Client) FlexibleLendingList() (*[]FlexibleLendingData, error) {
 	}
 	return resp, nil
 }
+
+type OrderBookSnapShot struct {
+	Lastupdateid float64    `json:"lastUpdateId"`
+	Bids         [][]string `json:"bids"`
+	Asks         [][]string `json:"asks"`
+}
+
+func (b *Client) OrderBookSnapShot() (*OrderBookSnapShot, error) {
+	res, err := b.do("spot", http.MethodGet, "api/v3/depth", nil, false, false)
+	if err != nil {
+		return nil, err
+	}
+	resp := &OrderBookSnapShot{}
+	err = json.Unmarshal(res, resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
