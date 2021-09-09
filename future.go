@@ -2,7 +2,6 @@ package bnnapi
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 )
 
@@ -101,7 +100,6 @@ func (b *Client) SwapPositions() ([]*SwapPositionResponse, error) {
 	resp := []*SwapPositionResponse{}
 	err = json.Unmarshal(res, &resp)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 
@@ -185,7 +183,6 @@ func (b *Client) SwapOpenInterest(symbol string) (*SwapOpenInterestResponse, err
 	resp := &SwapOpenInterestResponse{}
 	err = json.Unmarshal(res, resp)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 
@@ -210,7 +207,6 @@ func (b *Client) SwapNotionalandLeverage() (*[]NotionalandLeverage, error) {
 	resp := []NotionalandLeverage{}
 	err = json.Unmarshal(res, &resp)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 
@@ -243,7 +239,6 @@ func (b *Client) SwapChangeInitialLeverage(symbol string, leverage int) (*Change
 	resp := &ChangeLeverageResponse{}
 	err = json.Unmarshal(res, resp)
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 

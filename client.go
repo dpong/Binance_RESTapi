@@ -7,13 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/google/go-querystring/query"
-
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -23,11 +21,10 @@ type Client struct {
 	key, secret string
 	subaccount  string
 	client      *http.Client
-	Logger      *log.Logger
 	window      int
 }
 
-func New(key, secret, subaccount string, log *log.Logger) *Client {
+func New(key, secret, subaccount string) *Client {
 	hc := &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -36,7 +33,6 @@ func New(key, secret, subaccount string, log *log.Logger) *Client {
 		secret:     secret,
 		subaccount: subaccount,
 		client:     hc,
-		Logger:     log,
 		window:     5000,
 	}
 }
@@ -61,7 +57,6 @@ func (c *Client) do(product, method, path string, data interface{}, sign bool, s
 		mac := hmac.New(sha256.New, []byte(c.secret))
 		_, err = mac.Write([]byte(payload))
 		if err != nil {
-			c.Logger.Println(err)
 			return nil, err
 		}
 		payload = fmt.Sprintf("%s&signature=%s", payload, hex.EncodeToString(mac.Sum(nil)))
@@ -79,13 +74,11 @@ func (c *Client) do(product, method, path string, data interface{}, sign bool, s
 	req.Header.Add("Accept", "application/json")
 	resp, err := c.client.Do(req)
 	if err != nil {
-		c.Logger.Println(err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 	response, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		c.Logger.Println(err)
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {

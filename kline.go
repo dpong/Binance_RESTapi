@@ -24,13 +24,11 @@ func (b *Client) SpotKlines(symbol, interval string, limit int, start, end time.
 	}
 	res, err := b.do("spot", http.MethodGet, "api/v3/klines", opts, false, false)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	var klines [][]interface{}
 	err = json.Unmarshal(res, &klines)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	return klines, nil
@@ -55,13 +53,11 @@ func (b *Client) SwapKlines(symbol, interval string, limit int, start, end time.
 	}
 	res, err := b.do("future", http.MethodGet, "fapi/v1/klines", opts, false, false)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	var klines [][]interface{}
 	err = json.Unmarshal(res, &klines)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	return klines, nil

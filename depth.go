@@ -20,22 +20,20 @@ func (b *Client) SpotDepth(symbol string, limit int) (*Depth, error) {
 	}
 	res, err := b.do("spot", http.MethodGet, "api/v3/depth", opts, false, false)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	depth := &Depth{}
 	err = json.Unmarshal(res, &depth)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	return depth, nil
 }
 
 type Depth struct {
-	LastUpdateID int           `json:"lastUpdateId"`
-	Bids         []interface{} `json:"bids"`
-	Asks         []interface{} `json:"asks"`
+	LastUpdateID int        `json:"lastUpdateId"`
+	Bids         [][]string `json:"bids"`
+	Asks         [][]string `json:"asks"`
 }
 
 func (b *Client) SwapDepth(symbol string, limit int) (*SwapDepth, error) {
@@ -48,13 +46,11 @@ func (b *Client) SwapDepth(symbol string, limit int) (*SwapDepth, error) {
 	}
 	res, err := b.do("future", http.MethodGet, "fapi/v1/depth", opts, false, false)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	depth := &SwapDepth{}
 	err = json.Unmarshal(res, &depth)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	return depth, nil

@@ -18,13 +18,11 @@ func (b *Client) FundingRateHistory(symbol string, limit int, start, end int64) 
 	}
 	res, err := b.do("future", http.MethodGet, "fapi/v1/fundingRate", opts, false, false)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	funding := []*FundingData{}
 	err = json.Unmarshal(res, &funding)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	return funding, nil
@@ -46,13 +44,11 @@ type FundingData struct {
 func (b *Client) MarkPrice() ([]*MarkPriceData, error) {
 	res, err := b.do("future", http.MethodGet, "fapi/v1/premiumIndex", nil, false, false)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	price := []*MarkPriceData{}
 	err = json.Unmarshal(res, &price)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	return price, nil
@@ -81,13 +77,11 @@ func (b *Client) GetIncomeHistory(method, symbol string, limit int, start, end i
 	}
 	res, err := b.do("future", http.MethodGet, "fapi/v1/income", opts, true, false)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	income := []*IncomeResponse{}
 	err = json.Unmarshal(res, &income)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	return income, nil

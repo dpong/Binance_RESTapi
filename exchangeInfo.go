@@ -5,13 +5,11 @@ import "net/http"
 func (b *Client) SpotInfo() (*SpotExchangeInfo, error) {
 	res, err := b.do("spot", http.MethodGet, "api/v3/exchangeInfo", nil, false, false)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	exchange := &SpotExchangeInfo{}
 	err = json.Unmarshal(res, &exchange)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	return exchange, nil
@@ -21,13 +19,11 @@ func (b *Client) SpotInfo() (*SpotExchangeInfo, error) {
 func (b *Client) SwapInfo() (*SwapExchangeInfo, error) {
 	res, err := b.do("future", http.MethodGet, "fapi/v1/exchangeInfo", nil, false, false)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	exchange := &SwapExchangeInfo{}
 	err = json.Unmarshal(res, &exchange)
 	if err != nil {
-		b.Logger.Println(err)
 		return nil, err
 	}
 	return exchange, nil

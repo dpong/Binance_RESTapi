@@ -10,7 +10,6 @@ func (b *Client) SpotPrices() ([]*SymbolPrice, error) {
 	prices := []*SymbolPrice{}
 	err = json.Unmarshal(res, &prices)
 	if err != nil {
-		b.Logger.Println(err)
 		return []*SymbolPrice{}, err
 	}
 	return prices, nil
@@ -24,7 +23,6 @@ func (b *Client) SpotOrderBookTickers() ([]*SymbolOrderBookTicker, error) {
 	prices := []*SymbolOrderBookTicker{}
 	err = json.Unmarshal(res, &prices)
 	if err != nil {
-		b.Logger.Println(err)
 		return []*SymbolOrderBookTicker{}, err
 	}
 	return prices, nil
@@ -52,7 +50,6 @@ func (b *Client) SwapPrices() ([]*SwapPrice, error) {
 	prices := []*SwapPrice{}
 	err = json.Unmarshal(res, &prices)
 	if err != nil {
-		b.Logger.Println(err)
 		return []*SwapPrice{}, err
 	}
 	return prices, nil
@@ -66,7 +63,6 @@ func (b *Client) SwapOrderBookTickers() ([]*SymbolOrderBookTicker, error) {
 	prices := []*SymbolOrderBookTicker{}
 	err = json.Unmarshal(res, &prices)
 	if err != nil {
-		b.Logger.Println(err)
 		return []*SymbolOrderBookTicker{}, err
 	}
 	return prices, nil
@@ -90,7 +86,6 @@ func (b *Client) SwapMarkPrices(symbol string) ([]*SwapMarkPriceResponse, error)
 	prices := []*SwapMarkPriceResponse{}
 	err = json.Unmarshal(res, &prices)
 	if err != nil {
-		b.Logger.Println(err)
 		return []*SwapMarkPriceResponse{}, err
 	}
 	return prices, nil
