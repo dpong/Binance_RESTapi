@@ -204,13 +204,14 @@ func SpotLocalOrderBook(symbol string, logger *log.Logger) *OrderBookBranch {
 	o.Cancel = &cancel
 	bookticker := make(chan map[string]interface{}, 50)
 	errCh := make(chan error, 5)
+	symbol = strings.ToUpper(symbol)
 	go func(logger *log.Logger, bookticker *chan map[string]interface{}) {
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				if err := BinanceSocket(ctx, "spot", "BTCUSDT", "@depth@100ms", logger, bookticker); err == nil {
+				if err := BinanceSocket(ctx, "spot", symbol, "@depth@100ms", logger, bookticker); err == nil {
 					return
 				}
 				errCh <- errors.New("Reconnect websocket")
