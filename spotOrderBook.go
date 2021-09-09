@@ -198,7 +198,7 @@ func (o *OrderBookBranch) GetAsks() ([][]string, bool) {
 	return book, true
 }
 
-func BinanceLocalOrderBook(symbol string, logger *log.Logger) *OrderBookBranch {
+func SpotLocalOrderBook(symbol string, logger *log.Logger) *OrderBookBranch {
 	var o OrderBookBranch
 	ctx, cancel := context.WithCancel(context.Background())
 	o.Cancel = &cancel
