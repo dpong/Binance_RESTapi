@@ -41,7 +41,7 @@ func (b *Client) SwapDepth(symbol string, limit int) (*SwapDepth, error) {
 		Symbol: symbol,
 		Limit:  limit,
 	}
-	if opts.Limit == 0 || opts.Limit > 100 {
+	if opts.Limit == 0 || opts.Limit > 1000 {
 		opts.Limit = 100
 	}
 	res, err := b.do("future", http.MethodGet, "fapi/v1/depth", opts, false, false)
@@ -57,9 +57,9 @@ func (b *Client) SwapDepth(symbol string, limit int) (*SwapDepth, error) {
 }
 
 type SwapDepth struct {
-	LastUpdateID    int           `json:"lastUpdateId"`
-	Bids            []interface{} `json:"bids"`
-	Asks            []interface{} `json:"asks"`
-	MessageOutTime  int64         `json:"E"`
-	TransactionTime int64         `json:"T"`
+	LastUpdateID    int        `json:"lastUpdateId"`
+	Bids            [][]string `json:"bids"`
+	Asks            [][]string `json:"asks"`
+	MessageOutTime  int64      `json:"E"`
+	TransactionTime int64      `json:"T"`
 }

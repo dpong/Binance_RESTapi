@@ -36,19 +36,34 @@ type WS struct {
 }
 
 // logurs as log system
-func (o *OrderBookBranch) GetOrderBookSnapShot(symbol string) error {
+func (o *OrderBookBranch) GetOrderBookSnapShot(product, symbol string) error {
 	client := New("", "", "")
-	res, err := client.SpotDepth(symbol, 5000)
-	if err != nil {
-		return err
+	switch product {
+	case "spot":
+		res, err := client.SpotDepth(symbol, 5000)
+		if err != nil {
+			return err
+		}
+		o.Bids.mux.Lock()
+		o.Bids.Book = res.Bids
+		o.Bids.mux.Unlock()
+		o.Asks.mux.Lock()
+		o.Asks.Book = res.Asks
+		o.Asks.mux.Unlock()
+		o.LastUpdatedId = decimal.NewFromInt(int64(res.LastUpdateID))
+	case "swap":
+		res, err := client.SwapDepth(symbol, 1000)
+		if err != nil {
+			return err
+		}
+		o.Bids.mux.Lock()
+		o.Bids.Book = res.Bids
+		o.Bids.mux.Unlock()
+		o.Asks.mux.Lock()
+		o.Asks.Book = res.Asks
+		o.Asks.mux.Unlock()
+		o.LastUpdatedId = decimal.NewFromInt(int64(res.LastUpdateID))
 	}
-	o.Bids.mux.Lock()
-	o.Bids.Book = res.Bids
-	o.Bids.mux.Unlock()
-	o.Asks.mux.Lock()
-	o.Asks.Book = res.Asks
-	o.Asks.mux.Unlock()
-	o.LastUpdatedId = decimal.NewFromInt(int64(res.LastUpdateID))
 	o.SnapShoted = true
 	return nil
 }
@@ -224,7 +239,8 @@ func SpotLocalOrderBook(symbol string, logger *log.Logger) *OrderBookBranch {
 			select {
 			case <-ctx.Done():
 			default:
-				o.MaintainOrderBook(ctx, symbol, &bookticker, &errCh)
+				o.MaintainOrderBook(ctx, "spot", symbol, &bookticker, &errCh)
+				logger.Warningf("Refreshing %s spot local orderbook.\n", symbol)
 				time.Sleep(time.Second)
 			}
 		}
@@ -232,14 +248,51 @@ func SpotLocalOrderBook(symbol string, logger *log.Logger) *OrderBookBranch {
 	return &o
 }
 
-func (o *OrderBookBranch) MaintainOrderBook(ctx context.Context, symbol string, bookticker *chan map[string]interface{}, errCh *chan error) {
-	var storage []map[string]interface{}
+func SwapLocalOrderBook(symbol string, logger *log.Logger) *OrderBookBranch {
+	var o OrderBookBranch
+	ctx, cancel := context.WithCancel(context.Background())
+	o.Cancel = &cancel
+	bookticker := make(chan map[string]interface{}, 50)
+	errCh := make(chan error, 5)
+	symbol = strings.ToUpper(symbol)
+	go func(logger *log.Logger, bookticker *chan map[string]interface{}) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				if err := BinanceSocket(ctx, "swap", symbol, "@depth@100ms", logger, bookticker); err == nil {
+					return
+				}
+				errCh <- errors.New("Reconnect websocket")
+				time.Sleep(time.Second)
+			}
+		}
+	}(logger, &bookticker)
 	go func() {
-		time.Sleep(time.Second * 3)
-		o.GetOrderBookSnapShot(symbol)
-		o.SnapShoted = true
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				o.MaintainOrderBook(ctx, "swap", symbol, &bookticker, &errCh)
+				logger.Warningf("Refreshing %s swap local orderbook.\n", symbol)
+				time.Sleep(time.Second)
+			}
+		}
 	}()
+	return &o
+}
 
+func (o *OrderBookBranch) MaintainOrderBook(ctx context.Context, product, symbol string, bookticker *chan map[string]interface{}, errCh *chan error) {
+	var storage []map[string]interface{}
+	var linked bool = false
+	o.SnapShoted = false
+	o.LastUpdatedId = decimal.NewFromInt(0)
+	go func() {
+		time.Sleep(time.Second)
+		o.GetOrderBookSnapShot(product, symbol)
+	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -249,32 +302,50 @@ func (o *OrderBookBranch) MaintainOrderBook(ctx context.Context, symbol string, 
 		default:
 			message := <-(*bookticker)
 			if len(message) != 0 {
-				storage = append(storage, message)
 				if !o.SnapShoted {
+					storage = append(storage, message)
 					continue
 				}
-				if len(storage) > 1 {
+				if len(storage) != 0 {
 					for _, data := range storage {
 						headID := decimal.NewFromFloat(data["U"].(float64))
 						tailID := decimal.NewFromFloat(data["u"].(float64))
 						snapID := o.LastUpdatedId.Add(decimal.NewFromInt(1))
 						//U <= lastUpdateId+1 AND u >= lastUpdateId+1.
-						if headID.LessThanOrEqual(snapID) && tailID.GreaterThanOrEqual(snapID) {
-							// handle incoming data
-							o.UpdateNewComing(&message)
-							o.LastUpdatedId = tailID
+						if !linked {
+							if headID.LessThanOrEqual(snapID) && tailID.GreaterThanOrEqual(snapID) {
+								// handle incoming data
+								linked = true
+								o.UpdateNewComing(&message)
+								o.LastUpdatedId = tailID
+							}
+						} else {
+							if linked && headID.Equal(snapID) {
+								o.UpdateNewComing(&message)
+								o.LastUpdatedId = tailID
+							}
 						}
-						storage = storage[1:]
 					}
+					// clear storage
+					storage = make([]map[string]interface{}, 0)
 				}
-
 				// handle incoming data
 				headID := decimal.NewFromFloat(message["U"].(float64))
 				tailID := decimal.NewFromFloat(message["u"].(float64))
 				snapID := o.LastUpdatedId.Add(decimal.NewFromInt(1))
-				if headID.LessThanOrEqual(snapID) && tailID.GreaterThanOrEqual(snapID) {
-					o.UpdateNewComing(&message)
-					o.LastUpdatedId = tailID
+				if !linked {
+					if headID.LessThanOrEqual(snapID) && tailID.GreaterThanOrEqual(snapID) {
+						linked = true
+						o.UpdateNewComing(&message)
+						o.LastUpdatedId = tailID
+					}
+				} else {
+					if headID.Equal(snapID) {
+						o.UpdateNewComing(&message)
+						o.LastUpdatedId = tailID
+					} else {
+						*errCh <- errors.New("restart.")
+					}
 				}
 			}
 		}
@@ -313,7 +384,7 @@ func BinanceSocket(ctx context.Context, product, symbol, channel string, logger 
 	if err != nil {
 		return err
 	}
-	logger.Infoln("Connected:", url)
+	logger.Infof("Binance %s %s orderBook socket connected.\n", symbol, product)
 	w.Conn = conn
 	defer conn.Close()
 	if err := w.Conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
