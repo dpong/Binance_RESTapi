@@ -308,48 +308,52 @@ func (o *OrderBookBranch) MaintainOrderBook(ctx context.Context, product, symbol
 				}
 				if len(storage) != 0 {
 					for _, data := range storage {
-						headID := decimal.NewFromFloat(data["U"].(float64))
-						tailID := decimal.NewFromFloat(data["u"].(float64))
-						snapID := o.LastUpdatedId.Add(decimal.NewFromInt(1))
-						//U <= lastUpdateId+1 AND u >= lastUpdateId+1.
-						if !linked {
-							if headID.LessThanOrEqual(snapID) && tailID.GreaterThanOrEqual(snapID) {
-								// handle incoming data
-								linked = true
-								o.UpdateNewComing(&message)
-								o.LastUpdatedId = tailID
+						switch product {
+						case "spot":
+							if err := o.SpotUpdateJudge(&data, &linked); err != nil {
+								*errCh <- err
 							}
-						} else {
-							if linked && headID.Equal(snapID) {
-								o.UpdateNewComing(&message)
-								o.LastUpdatedId = tailID
-							}
+						case "swap":
+
 						}
 					}
 					// clear storage
 					storage = make([]map[string]interface{}, 0)
 				}
 				// handle incoming data
-				headID := decimal.NewFromFloat(message["U"].(float64))
-				tailID := decimal.NewFromFloat(message["u"].(float64))
-				snapID := o.LastUpdatedId.Add(decimal.NewFromInt(1))
-				if !linked {
-					if headID.LessThanOrEqual(snapID) && tailID.GreaterThanOrEqual(snapID) {
-						linked = true
-						o.UpdateNewComing(&message)
-						o.LastUpdatedId = tailID
+				switch product {
+				case "spot":
+					if err := o.SpotUpdateJudge(&message, &linked); err != nil {
+						*errCh <- err
 					}
-				} else {
-					if headID.Equal(snapID) {
-						o.UpdateNewComing(&message)
-						o.LastUpdatedId = tailID
-					} else {
-						*errCh <- errors.New("restart.")
-					}
+				case "swap":
+
 				}
 			}
 		}
 	}
+}
+
+func (o *OrderBookBranch) SpotUpdateJudge(message *map[string]interface{}, linked *bool) error {
+	headID := decimal.NewFromFloat((*message)["U"].(float64))
+	tailID := decimal.NewFromFloat((*message)["u"].(float64))
+	snapID := o.LastUpdatedId.Add(decimal.NewFromInt(1))
+	if !(*linked) {
+		//U <= lastUpdateId+1 AND u >= lastUpdateId+1.
+		if headID.LessThanOrEqual(snapID) && tailID.GreaterThanOrEqual(snapID) {
+			(*linked) = true
+			o.UpdateNewComing(message)
+			o.LastUpdatedId = tailID
+		}
+	} else {
+		if headID.Equal(snapID) {
+			o.UpdateNewComing(message)
+			o.LastUpdatedId = tailID
+		} else {
+			return errors.New("refresh.")
+		}
+	}
+	return nil
 }
 
 func DecodingMap(message []byte, logger *log.Logger) (res map[string]interface{}, err error) {
