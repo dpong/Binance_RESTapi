@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"math"
 	"strings"
 	"sync"
 	"time"
@@ -20,11 +19,27 @@ type OrderBookBranch struct {
 	LastUpdatedId decimal.Decimal
 	SnapShoted    bool
 	Cancel        *context.CancelFunc
+	BuyTrade      TradeImpact
+	SellTrade     TradeImpact
+	LookBack      time.Duration
+}
+
+type TradeImpact struct {
+	mux      sync.RWMutex
+	Stamp    []time.Time
+	Qty      []decimal.Decimal
+	Notional []decimal.Decimal
 }
 
 type BookBranch struct {
-	mux  sync.RWMutex
-	Book [][]string
+	mux   sync.RWMutex
+	Book  [][]string
+	Micro []BookMicro
+}
+
+type BookMicro struct {
+	OrderNum int
+	Trend    string
 }
 
 type WS struct {
@@ -46,9 +61,23 @@ func (o *OrderBookBranch) GetOrderBookSnapShot(product, symbol string) error {
 		}
 		o.Bids.mux.Lock()
 		o.Bids.Book = res.Bids
+		for i := 0; i < len(res.Bids); i++ {
+			// micro part
+			micro := BookMicro{
+				OrderNum: 1, // initial order num is 1
+			}
+			o.Bids.Micro = append(o.Bids.Micro, micro)
+		}
 		o.Bids.mux.Unlock()
 		o.Asks.mux.Lock()
 		o.Asks.Book = res.Asks
+		for i := 0; i < len(res.Asks); i++ {
+			// micro part
+			micro := BookMicro{
+				OrderNum: 1, // initial order num is 1
+			}
+			o.Asks.Micro = append(o.Bids.Micro, micro)
+		}
 		o.Asks.mux.Unlock()
 		o.LastUpdatedId = decimal.NewFromInt(int64(res.LastUpdateID))
 	case "swap":
@@ -58,10 +87,23 @@ func (o *OrderBookBranch) GetOrderBookSnapShot(product, symbol string) error {
 		}
 		o.Bids.mux.Lock()
 		o.Bids.Book = res.Bids
-		//fmt.Println("bids", res.Bids)
+		for i := 0; i < len(res.Bids); i++ {
+			// micro part
+			micro := BookMicro{
+				OrderNum: 1, // initial order num is 1
+			}
+			o.Bids.Micro = append(o.Bids.Micro, micro)
+		}
 		o.Bids.mux.Unlock()
 		o.Asks.mux.Lock()
 		o.Asks.Book = res.Asks
+		for i := 0; i < len(res.Asks); i++ {
+			// micro part
+			micro := BookMicro{
+				OrderNum: 1, // initial order num is 1
+			}
+			o.Asks.Micro = append(o.Bids.Micro, micro)
+		}
 		o.Asks.mux.Unlock()
 		o.LastUpdatedId = decimal.NewFromInt(int64(res.LastUpdateID))
 	}
@@ -116,7 +158,11 @@ func (o *OrderBookBranch) DealWithBidPriceLevel(price, qty decimal.Decimal) {
 			}
 			o.Bids.Book = append(o.Bids.Book, []string{})
 			copy(o.Bids.Book[level+1:], o.Bids.Book[level:])
+			// micro part
+			o.Bids.Micro = append(o.Bids.Micro, BookMicro{})
+			copy(o.Bids.Micro[level+1:], o.Bids.Micro[level:])
 			o.Bids.Book[level] = []string{price.String(), qty.String()}
+			o.Bids.Micro[level].OrderNum = 1
 			return
 		case price.LessThan(bookPrice):
 			if level == l-1 {
@@ -126,6 +172,10 @@ func (o *OrderBookBranch) DealWithBidPriceLevel(price, qty decimal.Decimal) {
 					return
 				}
 				o.Bids.Book = append(o.Bids.Book, []string{price.String(), qty.String()})
+				data := BookMicro{
+					OrderNum: 1,
+				}
+				o.Bids.Micro = append(o.Bids.Micro, data)
 				return
 			}
 			continue
@@ -133,7 +183,22 @@ func (o *OrderBookBranch) DealWithBidPriceLevel(price, qty decimal.Decimal) {
 			if qty.IsZero() {
 				// delete level
 				o.Bids.Book = append(o.Bids.Book[:level], o.Bids.Book[level+1:]...)
+				o.Bids.Micro = append(o.Bids.Micro[:level], o.Bids.Micro[level+1:]...)
 				return
+			}
+			oldQty, _ := decimal.NewFromString(o.Bids.Book[level][1])
+			switch {
+			case oldQty.GreaterThan(qty):
+				// add order
+				o.Bids.Micro[level].OrderNum++
+				o.Bids.Micro[level].Trend = "add"
+			case oldQty.LessThan(qty):
+				// cut order
+				o.Bids.Micro[level].OrderNum--
+				o.Bids.Micro[level].Trend = "cut"
+				if o.Bids.Micro[level].OrderNum < 1 {
+					o.Bids.Micro[level].OrderNum = 1
+				}
 			}
 			o.Bids.Book[level][1] = qty.String()
 			return
@@ -156,7 +221,11 @@ func (o *OrderBookBranch) DealWithAskPriceLevel(price, qty decimal.Decimal) {
 			}
 			o.Asks.Book = append(o.Asks.Book, []string{})
 			copy(o.Asks.Book[level+1:], o.Asks.Book[level:])
+			// micro part
+			o.Asks.Micro = append(o.Asks.Micro, BookMicro{})
+			copy(o.Asks.Micro[level+1:], o.Asks.Micro[level:])
 			o.Asks.Book[level] = []string{price.String(), qty.String()}
+			o.Asks.Micro[level].OrderNum = 1
 			return
 		case price.GreaterThan(bookPrice):
 			if level == l-1 {
@@ -166,6 +235,10 @@ func (o *OrderBookBranch) DealWithAskPriceLevel(price, qty decimal.Decimal) {
 					return
 				}
 				o.Asks.Book = append(o.Asks.Book, []string{price.String(), qty.String()})
+				data := BookMicro{
+					OrderNum: 1,
+				}
+				o.Asks.Micro = append(o.Asks.Micro, data)
 				return
 			}
 			continue
@@ -173,7 +246,22 @@ func (o *OrderBookBranch) DealWithAskPriceLevel(price, qty decimal.Decimal) {
 			if qty.IsZero() {
 				// delete level
 				o.Asks.Book = append(o.Asks.Book[:level], o.Asks.Book[level+1:]...)
+				o.Asks.Micro = append(o.Asks.Micro[:level], o.Asks.Micro[level+1:]...)
 				return
+			}
+			oldQty, _ := decimal.NewFromString(o.Asks.Book[level][1])
+			switch {
+			case oldQty.GreaterThan(qty):
+				// add order
+				o.Asks.Micro[level].OrderNum++
+				o.Asks.Micro[level].Trend = "add"
+			case oldQty.LessThan(qty):
+				// cut order
+				o.Asks.Micro[level].OrderNum--
+				o.Asks.Micro[level].Trend = "cut"
+				if o.Asks.Micro[level].OrderNum < 1 {
+					o.Asks.Micro[level].OrderNum = 1
+				}
 			}
 			o.Asks.Book[level][1] = qty.String()
 			return
@@ -203,6 +291,16 @@ func (o *OrderBookBranch) GetBids() ([][]string, bool) {
 	return book, true
 }
 
+func (o *OrderBookBranch) GetBidMicro(idx int) (*BookMicro, bool) {
+	o.Bids.mux.RLock()
+	defer o.Bids.mux.RUnlock()
+	if len(o.Bids.Book) == 0 || !o.SnapShoted {
+		return nil, false
+	}
+	micro := o.Bids.Micro[idx]
+	return &micro, true
+}
+
 // return asks, ready or not
 func (o *OrderBookBranch) GetAsks() ([][]string, bool) {
 	o.Asks.mux.RLock()
@@ -214,13 +312,57 @@ func (o *OrderBookBranch) GetAsks() ([][]string, bool) {
 	return book, true
 }
 
+func (o *OrderBookBranch) GetAskMicro(idx int) (*BookMicro, bool) {
+	o.Asks.mux.RLock()
+	defer o.Asks.mux.RUnlock()
+	if len(o.Asks.Book) == 0 || !o.SnapShoted {
+		return nil, false
+	}
+	micro := o.Asks.Micro[idx]
+	return &micro, true
+}
+
+func (o *OrderBookBranch) GetBuyImpactNotion() decimal.Decimal {
+	o.BuyTrade.mux.RLock()
+	defer o.BuyTrade.mux.RUnlock()
+	var total decimal.Decimal
+	now := time.Now()
+	for i, st := range o.BuyTrade.Stamp {
+		if now.After(st.Add(o.LookBack)) {
+			continue
+		}
+		total = total.Add(o.BuyTrade.Notional[i])
+	}
+	return total
+}
+
+func (o *OrderBookBranch) GetSellImpactNotion() decimal.Decimal {
+	o.SellTrade.mux.RLock()
+	defer o.SellTrade.mux.RUnlock()
+	var total decimal.Decimal
+	now := time.Now()
+	for i, st := range o.SellTrade.Stamp {
+		if now.After(st.Add(o.LookBack)) {
+			continue
+		}
+		total = total.Add(o.SellTrade.Notional[i])
+	}
+	return total
+}
+
+func (o *OrderBookBranch) SetLookBackSec(input int) {
+	o.LookBack = time.Duration(input) * time.Second
+}
+
 func LocalOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch {
 	var o OrderBookBranch
+	o.SetLookBackSec(5) // default 5 sec
 	ctx, cancel := context.WithCancel(context.Background())
 	o.Cancel = &cancel
 	bookticker := make(chan map[string]interface{}, 50)
 	errCh := make(chan error, 5)
 	symbol = strings.ToUpper(symbol)
+	// stream orderbook
 	go func(logger *log.Logger, bookticker *chan map[string]interface{}) {
 		for {
 			select {
@@ -228,6 +370,28 @@ func LocalOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch
 				return
 			default:
 				if err := BinanceSocket(ctx, product, symbol, "@depth@100ms", logger, bookticker); err == nil {
+					return
+				}
+				errCh <- errors.New("Reconnect websocket")
+				time.Sleep(time.Second)
+			}
+		}
+	}(logger, &bookticker)
+	// stream trade
+	var tradeChannel string
+	switch product {
+	case "spot":
+		tradeChannel = "@trade"
+	case "swap":
+		tradeChannel = "@aggTrade"
+	}
+	go func(logger *log.Logger, bookticker *chan map[string]interface{}) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				if err := BinanceSocket(ctx, product, symbol, tradeChannel, logger, bookticker); err == nil {
 					return
 				}
 				errCh <- errors.New("Reconnect websocket")
@@ -275,7 +439,12 @@ func (o *OrderBookBranch) MaintainOrderBook(ctx context.Context, product, symbol
 			return
 		default:
 			message := <-(*bookticker)
-			if len(message) != 0 {
+			event, ok := message["e"].(string)
+			if !ok {
+				continue
+			}
+			switch event {
+			case "depthUpdate":
 				if !o.SnapShoted {
 					storage = append(storage, message)
 					continue
@@ -307,9 +476,84 @@ func (o *OrderBookBranch) MaintainOrderBook(ctx context.Context, product, symbol
 						*errCh <- err
 					}
 				}
+			default:
+				st := FormatingTimeStamp(message["T"].(float64))
+				price, _ := decimal.NewFromString(message["p"].(string))
+				size, _ := decimal.NewFromString(message["q"].(string))
+				// is the buyer the mm
+				var side string
+				buyerIsMM := message["m"].(bool)
+				if buyerIsMM {
+					side = "sell"
+				} else {
+					side = "buy"
+				}
+				o.LocateTradeImpact(side, price, size, st)
+				o.RenewTradeImpact()
 			}
 		}
 	}
+}
+
+func (o *OrderBookBranch) LocateTradeImpact(side string, price, size decimal.Decimal, st time.Time) {
+	switch side {
+	case "buy":
+		o.BuyTrade.mux.Lock()
+		defer o.BuyTrade.mux.Unlock()
+		o.BuyTrade.Qty = append(o.BuyTrade.Qty, size)
+		o.BuyTrade.Stamp = append(o.BuyTrade.Stamp, st)
+		o.BuyTrade.Notional = append(o.BuyTrade.Notional, price.Mul(size))
+	case "sell":
+		o.SellTrade.mux.Lock()
+		defer o.SellTrade.mux.Unlock()
+		o.SellTrade.Qty = append(o.SellTrade.Qty, size)
+		o.SellTrade.Stamp = append(o.SellTrade.Stamp, st)
+		o.SellTrade.Notional = append(o.SellTrade.Notional, price.Mul(size))
+	}
+}
+
+func (o *OrderBookBranch) RenewTradeImpact() {
+	var wg sync.WaitGroup
+	wg.Add(2)
+	now := time.Now()
+	go func() {
+		defer wg.Done()
+		o.BuyTrade.mux.Lock()
+		defer o.BuyTrade.mux.Unlock()
+		var loc int = -1
+		for i, st := range o.BuyTrade.Stamp {
+			if !now.After(st.Add(o.LookBack)) {
+				break
+			}
+			loc = i
+		}
+		if loc == -1 {
+			return
+		}
+		o.BuyTrade.Stamp = o.BuyTrade.Stamp[loc+1:]
+		o.BuyTrade.Qty = o.BuyTrade.Qty[loc+1:]
+		o.BuyTrade.Notional = o.BuyTrade.Notional[loc+1:]
+
+	}()
+	go func() {
+		defer wg.Done()
+		o.SellTrade.mux.Lock()
+		defer o.SellTrade.mux.Unlock()
+		var loc int = -1
+		for i, st := range o.SellTrade.Stamp {
+			if !now.After(st.Add(o.LookBack)) {
+				break
+			}
+			loc = i
+		}
+		if loc == -1 {
+			return
+		}
+		o.SellTrade.Stamp = o.SellTrade.Stamp[loc+1:]
+		o.SellTrade.Qty = o.SellTrade.Qty[loc+1:]
+		o.SellTrade.Notional = o.SellTrade.Notional[loc+1:]
+	}()
+	wg.Wait()
 }
 
 func (o *OrderBookBranch) SpotUpdateJudge(message *map[string]interface{}, linked *bool) error {
@@ -394,7 +638,7 @@ func BinanceSocket(ctx context.Context, product, symbol, channel string, logger 
 	if err != nil {
 		return err
 	}
-	logger.Infof("Binance %s %s orderBook socket connected.\n", symbol, product)
+	logger.Infof("Binance %s %s %s socket connected.\n", symbol, product, channel)
 	w.Conn = conn
 	defer conn.Close()
 	if err := w.Conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
@@ -445,17 +689,28 @@ func BinanceSocket(ctx context.Context, product, symbol, channel string, logger 
 }
 
 func (w *WS) HandleBinanceSocketData(res map[string]interface{}, mainCh *chan map[string]interface{}) error {
-	firstId := res["U"].(float64)
-	lastId := res["u"].(float64)
-	headID := decimal.NewFromFloat(firstId)
-	tailID := decimal.NewFromFloat(lastId)
-	if headID.LessThan(w.LastUpdatedId) {
-		m := w.OutBinanceErr()
-		*mainCh <- m
-		return errors.New("got error when updating lastUpdateId")
+	event, ok := res["e"].(string)
+	if !ok {
+		return nil
 	}
-	w.LastUpdatedId = tailID
-	*mainCh <- res
+	switch event {
+	case "depthUpdate":
+		firstId := res["U"].(float64)
+		lastId := res["u"].(float64)
+		headID := decimal.NewFromFloat(firstId)
+		tailID := decimal.NewFromFloat(lastId)
+		if headID.LessThan(w.LastUpdatedId) {
+			m := w.OutBinanceErr()
+			*mainCh <- m
+			return errors.New("got error when updating lastUpdateId")
+		}
+		w.LastUpdatedId = tailID
+		*mainCh <- res
+	case "trade":
+		*mainCh <- res
+	case "aggTrade":
+		*mainCh <- res
+	}
 	return nil
 }
 
@@ -466,6 +721,6 @@ func (w *WS) OutBinanceErr() map[string]interface{} {
 }
 
 func FormatingTimeStamp(timeFloat float64) time.Time {
-	sec, dec := math.Modf(timeFloat)
-	return time.Unix(int64(sec), int64(dec*(1e9)))
+	t := time.Unix(int64(timeFloat/1000), 0)
+	return t
 }
