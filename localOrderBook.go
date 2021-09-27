@@ -22,6 +22,8 @@ type OrderBookBranch struct {
 	BuyTrade      TradeImpact
 	SellTrade     TradeImpact
 	LookBack      time.Duration
+	fromLevel     int
+	toLevel       int
 }
 
 type TradeImpact struct {
@@ -350,33 +352,117 @@ func (o *OrderBookBranch) GetSellImpactNotion() decimal.Decimal {
 	return total
 }
 
+func (o *OrderBookBranch) CalBidCumNotional() (decimal.Decimal, bool) {
+	if len(o.Bids.Book) == 0 {
+		return decimal.NewFromFloat(0), false
+	}
+	if o.fromLevel > o.toLevel {
+		return decimal.NewFromFloat(0), false
+	}
+	o.Bids.mux.RLock()
+	defer o.Bids.mux.RUnlock()
+	var total decimal.Decimal
+	for level, item := range o.Bids.Book {
+		if level >= o.fromLevel && level <= o.toLevel {
+			price, _ := decimal.NewFromString(item[0])
+			qty, _ := decimal.NewFromString(item[1])
+			total = total.Add(qty.Mul(price))
+		} else if level > o.toLevel {
+			break
+		}
+	}
+	return total, true
+}
+
+func (o *OrderBookBranch) CalAskCumNotional() (decimal.Decimal, bool) {
+	if len(o.Asks.Book) == 0 {
+		return decimal.NewFromFloat(0), false
+	}
+	if o.fromLevel > o.toLevel {
+		return decimal.NewFromFloat(0), false
+	}
+	o.Asks.mux.RLock()
+	defer o.Asks.mux.RUnlock()
+	var total decimal.Decimal
+	for level, item := range o.Asks.Book {
+		if level >= o.fromLevel && level <= o.toLevel {
+			price, _ := decimal.NewFromString(item[0])
+			qty, _ := decimal.NewFromString(item[1])
+			total = total.Add(qty.Mul(price))
+		} else if level > o.toLevel {
+			break
+		}
+	}
+	return total, true
+}
+
+func (o *OrderBookBranch) IsBigImpactOnBid() bool {
+	impact := o.GetSellImpactNotion()
+	rest, ok := o.CalBidCumNotional()
+	if !ok {
+		return false
+	}
+	micro, ok := o.GetBidMicro(o.fromLevel)
+	if !ok {
+		return false
+	}
+	if impact.GreaterThanOrEqual(rest) && micro.Trend == "cut" {
+		return true
+	}
+	return false
+}
+
+func (o *OrderBookBranch) IsBigImpactOnAsk() bool {
+	impact := o.GetBuyImpactNotion()
+	rest, ok := o.CalAskCumNotional()
+	if !ok {
+		return false
+	}
+	micro, ok := o.GetAskMicro(o.fromLevel)
+	if !ok {
+		return false
+	}
+	if impact.GreaterThanOrEqual(rest) && micro.Trend == "cut" {
+		return true
+	}
+	return false
+}
+
 func (o *OrderBookBranch) SetLookBackSec(input int) {
 	o.LookBack = time.Duration(input) * time.Second
 }
 
+// fromLevel should smaller than toLevel
+func (o *OrderBookBranch) SetImpactCumRange(fromLevel, toLevel int) {
+	o.fromLevel = fromLevel
+	o.toLevel = toLevel
+}
+
+// default with look back 5 sec, impact range from 0 to 10 levels of the orderbook
 func LocalOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch {
 	var o OrderBookBranch
-	o.SetLookBackSec(5) // default 5 sec
+	o.SetLookBackSec(5)
+	o.SetImpactCumRange(0, 10)
 	ctx, cancel := context.WithCancel(context.Background())
 	o.Cancel = &cancel
 	bookticker := make(chan map[string]interface{}, 50)
 	errCh := make(chan error, 5)
 	symbol = strings.ToUpper(symbol)
 	// stream orderbook
-	go func(logger *log.Logger, bookticker *chan map[string]interface{}) {
+	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				if err := BinanceSocket(ctx, product, symbol, "@depth@100ms", logger, bookticker); err == nil {
+				if err := BinanceSocket(ctx, product, symbol, "@depth@100ms", logger, &bookticker); err == nil {
 					return
 				}
 				errCh <- errors.New("Reconnect websocket")
 				time.Sleep(time.Second)
 			}
 		}
-	}(logger, &bookticker)
+	}()
 	// stream trade
 	var tradeChannel string
 	switch product {
@@ -385,20 +471,20 @@ func LocalOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch
 	case "swap":
 		tradeChannel = "@aggTrade"
 	}
-	go func(logger *log.Logger, bookticker *chan map[string]interface{}) {
+	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				if err := BinanceSocket(ctx, product, symbol, tradeChannel, logger, bookticker); err == nil {
+				if err := BinanceSocket(ctx, product, symbol, tradeChannel, logger, &bookticker); err == nil {
 					return
 				}
 				errCh <- errors.New("Reconnect websocket")
 				time.Sleep(time.Second)
 			}
 		}
-	}(logger, &bookticker)
+	}()
 	go func() {
 		for {
 			select {
@@ -422,7 +508,12 @@ func SwapLocalOrderBook(symbol string, logger *log.Logger) *OrderBookBranch {
 	return LocalOrderBook("swap", symbol, logger)
 }
 
-func (o *OrderBookBranch) MaintainOrderBook(ctx context.Context, product, symbol string, bookticker *chan map[string]interface{}, errCh *chan error) {
+func (o *OrderBookBranch) MaintainOrderBook(
+	ctx context.Context,
+	product, symbol string,
+	bookticker *chan map[string]interface{},
+	errCh *chan error,
+) {
 	var storage []map[string]interface{}
 	var linked bool = false
 	o.SnapShoted = false
@@ -644,7 +735,6 @@ func BinanceSocket(ctx context.Context, product, symbol, channel string, logger 
 	if err := w.Conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
 		return err
 	}
-
 	for {
 		select {
 		case <-ctx.Done():
