@@ -78,7 +78,7 @@ func (o *OrderBookBranch) GetOrderBookSnapShot(product, symbol string) error {
 			micro := BookMicro{
 				OrderNum: 1, // initial order num is 1
 			}
-			o.Asks.Micro = append(o.Bids.Micro, micro)
+			o.Asks.Micro = append(o.Asks.Micro, micro)
 		}
 		o.Asks.mux.Unlock()
 		o.LastUpdatedId = decimal.NewFromInt(int64(res.LastUpdateID))
@@ -104,7 +104,7 @@ func (o *OrderBookBranch) GetOrderBookSnapShot(product, symbol string) error {
 			micro := BookMicro{
 				OrderNum: 1, // initial order num is 1
 			}
-			o.Asks.Micro = append(o.Bids.Micro, micro)
+			o.Asks.Micro = append(o.Asks.Micro, micro)
 		}
 		o.Asks.mux.Unlock()
 		o.LastUpdatedId = decimal.NewFromInt(int64(res.LastUpdateID))
