@@ -438,11 +438,10 @@ func (o *OrderBookBranch) SetImpactCumRange(fromLevel, toLevel int) {
 	o.toLevel = toLevel
 }
 
-// default with look back 5 sec, impact range from 0 to 10 levels of the orderbook
 func LocalOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch {
 	var o OrderBookBranch
 	o.SetLookBackSec(5)
-	o.SetImpactCumRange(0, 10)
+	o.SetImpactCumRange(0, 9)
 	ctx, cancel := context.WithCancel(context.Background())
 	o.Cancel = &cancel
 	bookticker := make(chan map[string]interface{}, 50)
@@ -500,10 +499,12 @@ func LocalOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch
 	return &o
 }
 
+// default with look back 5 sec, impact range from 0 to 10 levels of the orderbook
 func SpotLocalOrderBook(symbol string, logger *log.Logger) *OrderBookBranch {
 	return LocalOrderBook("spot", symbol, logger)
 }
 
+// default with look back 5 sec, impact range from 0 to 10 levels of the orderbook
 func SwapLocalOrderBook(symbol string, logger *log.Logger) *OrderBookBranch {
 	return LocalOrderBook("swap", symbol, logger)
 }
