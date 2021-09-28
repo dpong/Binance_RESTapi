@@ -215,7 +215,7 @@ func (o *OrderBookBranch) DealWithAskPriceLevel(price, qty decimal.Decimal) {
 	for level, item := range o.Asks.Book {
 		bookPrice, _ := decimal.NewFromString(item[0])
 		switch {
-		case price.GreaterThan(bookPrice):
+		case price.LessThan(bookPrice):
 			// insert level
 			if qty.IsZero() {
 				// ignore
@@ -229,7 +229,7 @@ func (o *OrderBookBranch) DealWithAskPriceLevel(price, qty decimal.Decimal) {
 			o.Asks.Book[level] = []string{price.String(), qty.String()}
 			o.Asks.Micro[level].OrderNum = 1
 			return
-		case price.LessThan(bookPrice):
+		case price.GreaterThan(bookPrice):
 			if level == l-1 {
 				// insert last level
 				if qty.IsZero() {
