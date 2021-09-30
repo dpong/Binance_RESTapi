@@ -432,16 +432,16 @@ func (o *OrderBookBranch) SetLookBackSec(input int) {
 	o.LookBack = time.Duration(input) * time.Second
 }
 
-// fromLevel should smaller than toLevel
-func (o *OrderBookBranch) SetImpactCumRange(fromLevel, toLevel int) {
-	o.fromLevel = fromLevel
-	o.toLevel = toLevel
+// top of the book is 1, to the level you want to sum all the notions
+func (o *OrderBookBranch) SetImpactCumRange(toLevel int) {
+	o.fromLevel = 0
+	o.toLevel = toLevel - 1
 }
 
 func LocalOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch {
 	var o OrderBookBranch
 	o.SetLookBackSec(5)
-	o.SetImpactCumRange(0, 9)
+	o.SetImpactCumRange(20)
 	ctx, cancel := context.WithCancel(context.Background())
 	o.Cancel = &cancel
 	bookticker := make(chan map[string]interface{}, 50)
