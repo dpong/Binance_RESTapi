@@ -14,7 +14,7 @@ func (b *Client) Withdraw(asset, network, address, tag string, amount float64) (
 	if tag != "" {
 		opts.Tag = tag
 	}
-	res, err := b.do("spot", http.MethodPost, "wapi/v3/withdraw.html", opts, true, false) //margin
+	res, err := b.do("spot", http.MethodPost, "sapi/v1/capital/withdraw/apply", opts, true, false) //margin
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +27,7 @@ func (b *Client) Withdraw(asset, network, address, tag string, amount float64) (
 }
 
 type WithdrawOpts struct {
-	Asset   string  `url:"asset"`
+	Asset   string  `url:"coin"`
 	Network string  `url:"network"`
 	Address string  `url:"address"`
 	Amount  float64 `url:"amount"`
@@ -35,7 +35,5 @@ type WithdrawOpts struct {
 }
 
 type WithdrawResponse struct {
-	Msg     string `json:"msg, omitempty"`
-	Success bool   `json:"success, omitempty"`
-	ID      string `json:"id"`
+	ID string `json:"id"`
 }
