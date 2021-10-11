@@ -192,6 +192,7 @@ func (o *OrderBookBranch) DealWithBidPriceLevel(price, qty decimal.Decimal) {
 					o.Bids.Book = append(o.Bids.Book[:level], o.Bids.Book[level+1:]...)
 					o.Bids.Micro = append(o.Bids.Micro[:level], o.Bids.Micro[level+1:]...)
 				}
+				return
 			}
 			oldQty, _ := decimal.NewFromString(o.Bids.Book[level][1])
 			switch {
