@@ -173,11 +173,76 @@ func (b *Client) FutureQueryOrder(symbol string, oid int) (*FutureQueryOrderReso
 		Symbol: usymbol,
 		Oid:    oid,
 	}
-	res, err := b.do("future", http.MethodGet, "/fapi/v1/order", opts, true, false)
+	res, err := b.do("future", http.MethodGet, "fapi/v1/order", opts, true, false)
 	if err != nil {
 		return nil, err
 	}
 	resp := &FutureQueryOrderResonse{}
+	err = json.Unmarshal(res, resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+type SwapCurrentOpenOrdersResponse struct {
+	Avgprice      string `json:"avgPrice"`
+	Clientorderid string `json:"clientOrderId"`
+	Cumquote      string `json:"cumQuote"`
+	Executedqty   string `json:"executedQty"`
+	Orderid       int    `json:"orderId"`
+	Origqty       string `json:"origQty"`
+	Origtype      string `json:"origType"`
+	Price         string `json:"price"`
+	Reduceonly    bool   `json:"reduceOnly"`
+	Side          string `json:"side"`
+	Positionside  string `json:"positionSide"`
+	Status        string `json:"status"`
+	Stopprice     string `json:"stopPrice"`
+	Closeposition bool   `json:"closePosition"`
+	Symbol        string `json:"symbol"`
+	Time          int64  `json:"time"`
+	Timeinforce   string `json:"timeInForce"`
+	Type          string `json:"type"`
+	Activateprice string `json:"activatePrice"`
+	Pricerate     string `json:"priceRate"`
+	Updatetime    int64  `json:"updateTime"`
+	Workingtype   string `json:"workingType"`
+	Priceprotect  bool   `json:"priceProtect"`
+}
+
+func (b *Client) GetCurrentSwapOrders(symbol string) ([]SwapCurrentOpenOrdersResponse, error) {
+	usymbol := strings.ToUpper(symbol)
+	opts := OnlySymbolOpt{
+		Symbol: usymbol,
+	}
+	res, err := b.do("future", http.MethodGet, "fapi/v1/openOrders", opts, true, false)
+	if err != nil {
+		return nil, err
+	}
+	resp := &[]SwapCurrentOpenOrdersResponse{}
+	err = json.Unmarshal(res, resp)
+	if err != nil {
+		return nil, err
+	}
+	return *resp, nil
+}
+
+type CancelAllSwaoOrdersResponse struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+}
+
+func (b *Client) CancelAllSwapOrders(symbol string) (*CancelAllSwaoOrdersResponse, error) {
+	usymbol := strings.ToUpper(symbol)
+	opts := OnlySymbolOpt{
+		Symbol: usymbol,
+	}
+	res, err := b.do("future", http.MethodDelete, "fapi/v1/allOpenOrders", opts, true, false)
+	if err != nil {
+		return nil, err
+	}
+	resp := &CancelAllSwaoOrdersResponse{}
 	err = json.Unmarshal(res, resp)
 	if err != nil {
 		return nil, err

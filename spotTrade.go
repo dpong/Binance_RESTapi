@@ -178,3 +178,105 @@ func (b *Client) SpotQueryOrder(symbol string, oid int) (*SpotQueryOrderResponse
 	}
 	return resp, nil
 }
+
+type CancelAllSpotOrdersResponse []struct {
+	Symbol              string `json:"symbol"`
+	Origclientorderid   string `json:"origClientOrderId,omitempty"`
+	Orderid             int    `json:"orderId,omitempty"`
+	Orderlistid         int    `json:"orderListId"`
+	Clientorderid       string `json:"clientOrderId,omitempty"`
+	Price               string `json:"price,omitempty"`
+	Origqty             string `json:"origQty,omitempty"`
+	Executedqty         string `json:"executedQty,omitempty"`
+	Cummulativequoteqty string `json:"cummulativeQuoteQty,omitempty"`
+	Status              string `json:"status,omitempty"`
+	Timeinforce         string `json:"timeInForce,omitempty"`
+	Type                string `json:"type,omitempty"`
+	Side                string `json:"side,omitempty"`
+	Contingencytype     string `json:"contingencyType,omitempty"`
+	Liststatustype      string `json:"listStatusType,omitempty"`
+	Listorderstatus     string `json:"listOrderStatus,omitempty"`
+	Listclientorderid   string `json:"listClientOrderId,omitempty"`
+	Transactiontime     int64  `json:"transactionTime,omitempty"`
+	Orders              []struct {
+		Symbol        string `json:"symbol"`
+		Orderid       int    `json:"orderId"`
+		Clientorderid string `json:"clientOrderId"`
+	} `json:"orders,omitempty"`
+	Orderreports []struct {
+		Symbol              string `json:"symbol"`
+		Origclientorderid   string `json:"origClientOrderId"`
+		Orderid             int    `json:"orderId"`
+		Orderlistid         int    `json:"orderListId"`
+		Clientorderid       string `json:"clientOrderId"`
+		Price               string `json:"price"`
+		Origqty             string `json:"origQty"`
+		Executedqty         string `json:"executedQty"`
+		Cummulativequoteqty string `json:"cummulativeQuoteQty"`
+		Status              string `json:"status"`
+		Timeinforce         string `json:"timeInForce"`
+		Type                string `json:"type"`
+		Side                string `json:"side"`
+		Stopprice           string `json:"stopPrice,omitempty"`
+		Icebergqty          string `json:"icebergQty"`
+	} `json:"orderReports,omitempty"`
+}
+
+type OnlySymbolOpt struct {
+	Symbol string `url:"symbol"`
+}
+
+func (b *Client) CancelAllSpotOrders(symbol string) (*CancelAllSpotOrdersResponse, error) {
+	usymbol := strings.ToUpper(symbol)
+	opts := OnlySymbolOpt{
+		Symbol: usymbol,
+	}
+	res, err := b.do("spot", http.MethodDelete, "api/v3/openOrders", opts, true, false)
+	if err != nil {
+		return nil, err
+	}
+	resp := &CancelAllSpotOrdersResponse{}
+	err = json.Unmarshal(res, resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+type SpotCurrentOpenOrdersResponse struct {
+	Symbol              string `json:"symbol"`
+	Orderid             int    `json:"orderId"`
+	Orderlistid         int    `json:"orderListId"`
+	Clientorderid       string `json:"clientOrderId"`
+	Price               string `json:"price"`
+	Origqty             string `json:"origQty"`
+	Executedqty         string `json:"executedQty"`
+	Cummulativequoteqty string `json:"cummulativeQuoteQty"`
+	Status              string `json:"status"`
+	Timeinforce         string `json:"timeInForce"`
+	Type                string `json:"type"`
+	Side                string `json:"side"`
+	Stopprice           string `json:"stopPrice"`
+	Icebergqty          string `json:"icebergQty"`
+	Time                int64  `json:"time"`
+	Updatetime          int64  `json:"updateTime"`
+	Isworking           bool   `json:"isWorking"`
+	Origquoteorderqty   string `json:"origQuoteOrderQty"`
+}
+
+func (b *Client) GetCurrentSpotOrders(symbol string) ([]SpotCurrentOpenOrdersResponse, error) {
+	usymbol := strings.ToUpper(symbol)
+	opts := OnlySymbolOpt{
+		Symbol: usymbol,
+	}
+	res, err := b.do("spot", http.MethodGet, "api/v3/openOrders", opts, true, false)
+	if err != nil {
+		return nil, err
+	}
+	resp := &[]SpotCurrentOpenOrdersResponse{}
+	err = json.Unmarshal(res, resp)
+	if err != nil {
+		return nil, err
+	}
+	return *resp, nil
+}
