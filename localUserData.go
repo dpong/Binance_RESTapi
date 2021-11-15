@@ -23,7 +23,7 @@ type UserDataBranch struct {
 type spotAccountBranch struct {
 	sync.RWMutex
 	Data        *SpotAccountResponse
-	LastUpdated decimal.Decimal
+	LastUpdated time.Time
 }
 
 func (u *UserDataBranch) Close() {
@@ -40,7 +40,7 @@ func (c *Client) SpotUserData(logger *log.Logger) *UserDataBranch {
 	return user
 }
 
-func (u *UserDataBranch) GetSpotAccount() *SpotAccountResponse {
+func (u *UserDataBranch) SpotAccount() *SpotAccountResponse {
 	u.spotAccount.RLock()
 	defer u.spotAccount.RUnlock()
 	return u.spotAccount.Data
@@ -103,7 +103,7 @@ func (u *UserDataBranch) getSpotAccountSnapShot(client *Client, errCh *chan erro
 	}
 	u.spotAccount.Data = res
 	u.snapShoted = true
-	u.spotAccount.LastUpdated = decimal.NewFromInt(int64(res.UpdateTime))
+	u.spotAccount.LastUpdated = time.Now()
 }
 
 func (u *UserDataBranch) maintainSpotUserData(
@@ -112,8 +112,9 @@ func (u *UserDataBranch) maintainSpotUserData(
 	userData *chan map[string]interface{},
 	errCh *chan error,
 ) {
+	errs := make(chan error, 1)
 	u.snapShoted = false
-	u.spotAccount.LastUpdated = decimal.NewFromInt(0)
+	u.spotAccount.LastUpdated = time.Time{}
 	// get the first snapshot to initial data struct
 	go func() {
 		time.Sleep(time.Second)
@@ -127,9 +128,32 @@ func (u *UserDataBranch) maintainSpotUserData(
 			select {
 			case <-ctx.Done():
 				return
+			case <-errs:
+				return
 			case <-snap.C:
 				u.snapShoted = false
 				u.getSpotAccountSnapShot(client, errCh)
+			default:
+				time.Sleep(time.Second)
+			}
+		}
+	}()
+	// self check
+	go func() {
+		check := time.NewTicker(time.Second * 10)
+		defer check.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-errs:
+				return
+			case <-check.C:
+				last := u.lastUpdateTime()
+				if time.Now().After(last.Add(time.Second * time.Duration(u.HttpUpdateInterval))) {
+					*errCh <- errors.New("spot user data out of date")
+					return
+				}
 			default:
 				time.Sleep(time.Second)
 			}
@@ -140,6 +164,7 @@ func (u *UserDataBranch) maintainSpotUserData(
 		case <-ctx.Done():
 			return
 		case <-(*errCh):
+			errs <- errors.New("restart")
 			return
 		default:
 			if !u.snapShoted {
@@ -151,9 +176,17 @@ func (u *UserDataBranch) maintainSpotUserData(
 			if !ok {
 				continue
 			}
+			eventTime := decimal.NewFromFloat(message["E"].(float64)).IntPart()
+			lastTime, err := TimeFromUnixTimestampInt(eventTime)
+			if err != nil {
+				continue
+			}
+			if !lastTime.After(u.lastUpdateTime()) {
+				continue
+			}
 			switch event {
 			case "outboundAccountPosition":
-				u.updateSpotAccountData(&message)
+				u.updateSpotAccountData(&message, lastTime)
 			case "balanceUpdate":
 				// next stage, no use for now
 			default:
@@ -163,7 +196,13 @@ func (u *UserDataBranch) maintainSpotUserData(
 	}
 }
 
-func (u *UserDataBranch) updateSpotAccountData(message *map[string]interface{}) {
+func (u *UserDataBranch) lastUpdateTime() time.Time {
+	u.spotAccount.RLock()
+	defer u.spotAccount.RUnlock()
+	return u.spotAccount.LastUpdated
+}
+
+func (u *UserDataBranch) updateSpotAccountData(message *map[string]interface{}, eventTime time.Time) {
 	array, ok := (*message)["B"].([]interface{})
 	if !ok {
 		return
@@ -190,7 +229,8 @@ func (u *UserDataBranch) updateSpotAccountData(message *map[string]interface{}) 
 		for idx, bal := range u.spotAccount.Data.Balances {
 			if bal.Asset == asset {
 				u.spotAccount.Data.Balances[idx].Free = free
-				u.spotAccount.Data.Balances[idx].Free = lock
+				u.spotAccount.Data.Balances[idx].Locked = lock
+				u.spotAccount.LastUpdated = eventTime
 				return
 			}
 		}
