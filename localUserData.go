@@ -40,10 +40,21 @@ func (c *Client) SpotUserData(logger *log.Logger) *UserDataBranch {
 	return user
 }
 
+// timeout in 5 sec
 func (u *UserDataBranch) SpotAccount() *SpotAccountResponse {
 	u.spotAccount.RLock()
 	defer u.spotAccount.RUnlock()
-	return u.spotAccount.Data
+	start := time.Now()
+	for {
+		if !u.snapShoted {
+			if time.Now().After(start.Add(time.Second * 5)) {
+				return nil
+			}
+			time.Sleep((time.Second))
+			continue
+		}
+		return u.spotAccount.Data
+	}
 }
 
 // if it's isomargin, should pass symbol. Else just pass ""
@@ -117,7 +128,7 @@ func (u *UserDataBranch) maintainSpotUserData(
 	u.spotAccount.LastUpdated = time.Time{}
 	// get the first snapshot to initial data struct
 	go func() {
-		time.Sleep(time.Second)
+		time.Sleep(time.Millisecond * 500)
 		u.getSpotAccountSnapShot(client, errCh)
 	}()
 	// update snapshot with steady interval
