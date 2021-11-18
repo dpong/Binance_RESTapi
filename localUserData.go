@@ -78,7 +78,7 @@ func (c *Client) localUserData(product, symbol string, logger *log.Logger) *User
 					time.Sleep(time.Second * 5)
 					continue
 				}
-				if err := BNNUserData(ctx, product, res.ListenKey, logger, &userData); err == nil {
+				if err := c.bNNUserData(ctx, product, res.ListenKey, logger, &userData); err == nil {
 					return
 				}
 				errCh <- errors.New("Reconnect websocket")
@@ -248,9 +248,9 @@ func (u *UserDataBranch) updateSpotAccountData(message *map[string]interface{}, 
 	}
 }
 
-func BNNUserData(ctx context.Context, product, listenKey string, logger *log.Logger, mainCh *chan map[string]interface{}) error {
+func (c *Client) bNNUserData(ctx context.Context, product, listenKey string, logger *log.Logger, mainCh *chan map[string]interface{}) error {
 	var w wS
-	var duration time.Duration = 600
+	var duration time.Duration = 1810
 	w.Logger = logger
 	w.OnErr = false
 	var buffer bytes.Buffer
@@ -272,6 +272,24 @@ func BNNUserData(ctx context.Context, product, listenKey string, logger *log.Log
 	if err := w.Conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
 		return err
 	}
+
+	go func() {
+		putKey := time.NewTicker(time.Minute * 30)
+		defer putKey.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-putKey.C:
+				if err := c.putListenKeyHub(product, listenKey); err != nil {
+					// time out in 1 sec
+					w.Conn.SetReadDeadline(time.Now().Add(time.Second))
+				}
+			default:
+				time.Sleep(time.Second)
+			}
+		}
+	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -337,4 +355,34 @@ func (c *Client) getListenKeyHub(product, symbol string) (*ListenKeyResponse, er
 		return res, nil
 	}
 	return nil, errors.New("unsupported product")
+}
+
+func (c *Client) putListenKeyHub(product, listenKey string) error {
+	switch product {
+	case "spot":
+		err := c.PutSpotListenKey(listenKey)
+		if err != nil {
+			return err
+		}
+		return nil
+	case "margin":
+		err := c.PutMarginListenKey(listenKey)
+		if err != nil {
+			return err
+		}
+		return nil
+	case "isomargin":
+		err := c.PutIsoMarginListenKey(listenKey)
+		if err != nil {
+			return err
+		}
+		return nil
+	case "swap":
+		err := c.PutSwapListenKey(listenKey)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	return errors.New("unsupported product")
 }

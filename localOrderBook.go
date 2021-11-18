@@ -498,7 +498,7 @@ func (o *OrderBookBranch) SetImpactCumRange(toLevel int) {
 	o.toLevel = toLevel - 1
 }
 
-func LocalOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch {
+func localOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch {
 	var o OrderBookBranch
 	o.SetLookBackSec(5)
 	o.SetImpactCumRange(20)
@@ -514,7 +514,7 @@ func LocalOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch
 			case <-ctx.Done():
 				return
 			default:
-				if err := BinanceSocket(ctx, product, symbol, "@depth@100ms", logger, &bookticker); err == nil {
+				if err := binanceSocket(ctx, product, symbol, "@depth@100ms", logger, &bookticker); err == nil {
 					return
 				}
 				errCh <- errors.New("Reconnect websocket")
@@ -536,7 +536,7 @@ func LocalOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch
 			case <-ctx.Done():
 				return
 			default:
-				if err := BinanceSocket(ctx, product, symbol, tradeChannel, logger, &bookticker); err == nil {
+				if err := binanceSocket(ctx, product, symbol, tradeChannel, logger, &bookticker); err == nil {
 					return
 				}
 				errCh <- errors.New("Reconnect websocket")
@@ -550,7 +550,7 @@ func LocalOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch
 			case <-ctx.Done():
 				return
 			default:
-				o.MaintainOrderBook(ctx, product, symbol, &bookticker, &errCh)
+				o.maintainOrderBook(ctx, product, symbol, &bookticker, &errCh)
 				logger.Warningf("Refreshing %s %s local orderbook.\n", symbol, product)
 				time.Sleep(time.Second)
 			}
@@ -561,15 +561,15 @@ func LocalOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch
 
 // default with look back 5 sec, impact range from 0 to 10 levels of the orderbook
 func SpotLocalOrderBook(symbol string, logger *log.Logger) *OrderBookBranch {
-	return LocalOrderBook("spot", symbol, logger)
+	return localOrderBook("spot", symbol, logger)
 }
 
 // default with look back 5 sec, impact range from 0 to 10 levels of the orderbook
 func SwapLocalOrderBook(symbol string, logger *log.Logger) *OrderBookBranch {
-	return LocalOrderBook("swap", symbol, logger)
+	return localOrderBook("swap", symbol, logger)
 }
 
-func (o *OrderBookBranch) MaintainOrderBook(
+func (o *OrderBookBranch) maintainOrderBook(
 	ctx context.Context,
 	product, symbol string,
 	bookticker *chan map[string]interface{},
@@ -772,7 +772,7 @@ func DecodingMap(message []byte, logger *log.Logger) (res map[string]interface{}
 	return res, nil
 }
 
-func BinanceSocket(ctx context.Context, product, symbol, channel string, logger *log.Logger, mainCh *chan map[string]interface{}) error {
+func binanceSocket(ctx context.Context, product, symbol, channel string, logger *log.Logger, mainCh *chan map[string]interface{}) error {
 	var w wS
 	var duration time.Duration = 30
 	w.Channel = channel
