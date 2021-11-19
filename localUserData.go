@@ -13,9 +13,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type UserDataBranch struct {
+type SpotUserDataBranch struct {
 	spotAccount        spotAccountBranch
-	snapShoted         bool
+	spotsnapShoted     bool
 	cancel             *context.CancelFunc
 	HttpUpdateInterval int
 }
@@ -26,27 +26,27 @@ type spotAccountBranch struct {
 	LastUpdated time.Time
 }
 
-func (u *UserDataBranch) Close() {
+func (u *SpotUserDataBranch) Close() {
 	(*u.cancel)()
 }
 
 // default is 900 sec
-func (u *UserDataBranch) SetHttpUpdateInterval(input int) {
+func (u *SpotUserDataBranch) SetHttpUpdateInterval(input int) {
 	u.HttpUpdateInterval = input
 }
 
-func (c *Client) SpotUserData(logger *log.Logger) *UserDataBranch {
+func (c *Client) SpotUserData(logger *log.Logger) *SpotUserDataBranch {
 	user := c.localUserData("spot", "", logger)
 	return user
 }
 
 // timeout in 5 sec
-func (u *UserDataBranch) SpotAccount() *SpotAccountResponse {
+func (u *SpotUserDataBranch) SpotAccount() *SpotAccountResponse {
 	u.spotAccount.RLock()
 	defer u.spotAccount.RUnlock()
 	start := time.Now()
 	for {
-		if !u.snapShoted {
+		if !u.spotsnapShoted {
 			if time.Now().After(start.Add(time.Second * 5)) {
 				return nil
 			}
@@ -58,8 +58,8 @@ func (u *UserDataBranch) SpotAccount() *SpotAccountResponse {
 }
 
 // if it's isomargin, should pass symbol. Else just pass ""
-func (c *Client) localUserData(product, symbol string, logger *log.Logger) *UserDataBranch {
-	var u UserDataBranch
+func (c *Client) localUserData(product, symbol string, logger *log.Logger) *SpotUserDataBranch {
+	var u SpotUserDataBranch
 	ctx, cancel := context.WithCancel(context.Background())
 	u.cancel = &cancel
 	u.HttpUpdateInterval = 900
@@ -72,7 +72,7 @@ func (c *Client) localUserData(product, symbol string, logger *log.Logger) *User
 			case <-ctx.Done():
 				return
 			default:
-				res, err := c.getListenKeyHub(product, symbol) // delete listen key
+				res, err := c.GetListenKeyHub(product, symbol) // delete listen key
 				if err != nil {
 					log.Println("retry listen key for user data stream in 5 sec..")
 					time.Sleep(time.Second * 5)
@@ -104,7 +104,7 @@ func (c *Client) localUserData(product, symbol string, logger *log.Logger) *User
 	return &u
 }
 
-func (u *UserDataBranch) getSpotAccountSnapShot(client *Client, errCh *chan error) {
+func (u *SpotUserDataBranch) getSpotAccountSnapShot(client *Client, errCh *chan error) {
 	u.spotAccount.Lock()
 	defer u.spotAccount.Unlock()
 	res, err := client.SpotAccount()
@@ -113,18 +113,18 @@ func (u *UserDataBranch) getSpotAccountSnapShot(client *Client, errCh *chan erro
 		return
 	}
 	u.spotAccount.Data = res
-	u.snapShoted = true
+	u.spotsnapShoted = true
 	u.spotAccount.LastUpdated = time.Now()
 }
 
-func (u *UserDataBranch) maintainSpotUserData(
+func (u *SpotUserDataBranch) maintainSpotUserData(
 	ctx context.Context,
 	client *Client,
 	userData *chan map[string]interface{},
 	errCh *chan error,
 ) {
 	errs := make(chan error, 1)
-	u.snapShoted = false
+	u.spotsnapShoted = false
 	u.spotAccount.LastUpdated = time.Time{}
 	// get the first snapshot to initial data struct
 	go func() {
@@ -142,7 +142,7 @@ func (u *UserDataBranch) maintainSpotUserData(
 			case <-errs:
 				return
 			case <-snap.C:
-				u.snapShoted = false
+				u.spotsnapShoted = false
 				u.getSpotAccountSnapShot(client, errCh)
 			default:
 				time.Sleep(time.Second)
@@ -178,7 +178,7 @@ func (u *UserDataBranch) maintainSpotUserData(
 			errs <- errors.New("restart")
 			return
 		default:
-			if !u.snapShoted {
+			if !u.spotsnapShoted {
 				time.Sleep(time.Second)
 				continue
 			}
@@ -207,13 +207,13 @@ func (u *UserDataBranch) maintainSpotUserData(
 	}
 }
 
-func (u *UserDataBranch) lastUpdateTime() time.Time {
+func (u *SpotUserDataBranch) lastUpdateTime() time.Time {
 	u.spotAccount.RLock()
 	defer u.spotAccount.RUnlock()
 	return u.spotAccount.LastUpdated
 }
 
-func (u *UserDataBranch) updateSpotAccountData(message *map[string]interface{}, eventTime time.Time) {
+func (u *SpotUserDataBranch) updateSpotAccountData(message *map[string]interface{}, eventTime time.Time) {
 	array, ok := (*message)["B"].([]interface{})
 	if !ok {
 		return
@@ -281,7 +281,7 @@ func (c *Client) bNNUserData(ctx context.Context, product, listenKey string, log
 			case <-ctx.Done():
 				return
 			case <-putKey.C:
-				if err := c.putListenKeyHub(product, listenKey); err != nil {
+				if err := c.PutListenKeyHub(product, listenKey); err != nil {
 					// time out in 1 sec
 					w.Conn.SetReadDeadline(time.Now().Add(time.Second))
 				}
@@ -327,7 +327,8 @@ func (c *Client) bNNUserData(ctx context.Context, product, listenKey string, log
 	}
 }
 
-func (c *Client) getListenKeyHub(product, symbol string) (*ListenKeyResponse, error) {
+// spot, swap, isomargin, margin
+func (c *Client) GetListenKeyHub(product, symbol string) (*ListenKeyResponse, error) {
 	switch product {
 	case "spot":
 		res, err := c.GetSpotListenKey()
@@ -357,7 +358,8 @@ func (c *Client) getListenKeyHub(product, symbol string) (*ListenKeyResponse, er
 	return nil, errors.New("unsupported product")
 }
 
-func (c *Client) putListenKeyHub(product, listenKey string) error {
+// spot, swap, isomargin, margin
+func (c *Client) PutListenKeyHub(product, listenKey string) error {
 	switch product {
 	case "spot":
 		err := c.PutSpotListenKey(listenKey)
