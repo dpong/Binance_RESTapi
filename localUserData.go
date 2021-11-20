@@ -4,33 +4,34 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
-	"github.com/shopspring/decimal"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/gorilla/websocket"
 )
 
 type SpotUserDataBranch struct {
-	spotAccount        spotAccountBranch
-	spotsnapShoted     bool
+	spotAccount spotAccountBranch
+
 	cancel             *context.CancelFunc
 	HttpUpdateInterval int
 }
 
 type spotAccountBranch struct {
 	sync.RWMutex
-	Data        *SpotAccountResponse
-	LastUpdated time.Time
+	Data           *SpotAccountResponse
+	LastUpdated    time.Time
+	spotsnapShoted bool
 }
 
 func (u *SpotUserDataBranch) Close() {
 	(*u.cancel)()
 }
 
-// default is 900 sec
+// default is 60 sec
 func (u *SpotUserDataBranch) SetHttpUpdateInterval(input int) {
 	u.HttpUpdateInterval = input
 }
@@ -44,17 +45,7 @@ func (c *Client) SpotUserData(logger *log.Logger) *SpotUserDataBranch {
 func (u *SpotUserDataBranch) SpotAccount() *SpotAccountResponse {
 	u.spotAccount.RLock()
 	defer u.spotAccount.RUnlock()
-	start := time.Now()
-	for {
-		if !u.spotsnapShoted {
-			if time.Now().After(start.Add(time.Second * 5)) {
-				return nil
-			}
-			time.Sleep((time.Second))
-			continue
-		}
-		return u.spotAccount.Data
-	}
+	return u.spotAccount.Data
 }
 
 // if it's isomargin, should pass symbol. Else just pass ""
@@ -62,7 +53,7 @@ func (c *Client) localUserData(product, symbol string, logger *log.Logger) *Spot
 	var u SpotUserDataBranch
 	ctx, cancel := context.WithCancel(context.Background())
 	u.cancel = &cancel
-	u.HttpUpdateInterval = 900
+	u.HttpUpdateInterval = 60
 	userData := make(chan map[string]interface{}, 100)
 	errCh := make(chan error, 5)
 	// stream user data
@@ -86,6 +77,25 @@ func (c *Client) localUserData(product, symbol string, logger *log.Logger) *Spot
 			}
 		}
 	}()
+	// update snapshot with steady interval
+	go func() {
+		snap := time.NewTicker(time.Second * time.Duration(u.HttpUpdateInterval))
+		defer snap.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-snap.C:
+				if err := u.getSpotAccountSnapShot(c); err != nil {
+					message := fmt.Sprintf("fail to getSpotAccountSnapShot() with err: %s", err.Error())
+					logger.Errorln(message)
+				}
+
+			default:
+				time.Sleep(time.Second)
+			}
+		}
+	}()
 	go func() {
 		for {
 			select {
@@ -101,20 +111,23 @@ func (c *Client) localUserData(product, symbol string, logger *log.Logger) *Spot
 			}
 		}
 	}()
+	// wait for connecting
+	time.Sleep(time.Second * 5)
 	return &u
 }
 
-func (u *SpotUserDataBranch) getSpotAccountSnapShot(client *Client, errCh *chan error) {
+func (u *SpotUserDataBranch) getSpotAccountSnapShot(client *Client) error {
 	u.spotAccount.Lock()
 	defer u.spotAccount.Unlock()
+	u.spotAccount.spotsnapShoted = false
 	res, err := client.SpotAccount()
 	if err != nil {
-		*errCh <- err
-		return
+		return err
 	}
 	u.spotAccount.Data = res
-	u.spotsnapShoted = true
+	u.spotAccount.spotsnapShoted = true
 	u.spotAccount.LastUpdated = time.Now()
+	return nil
 }
 
 func (u *SpotUserDataBranch) maintainSpotUserData(
@@ -123,32 +136,11 @@ func (u *SpotUserDataBranch) maintainSpotUserData(
 	userData *chan map[string]interface{},
 	errCh *chan error,
 ) {
-	errs := make(chan error, 1)
-	u.spotsnapShoted = false
-	u.spotAccount.LastUpdated = time.Time{}
+	innerErr := make(chan error, 1)
 	// get the first snapshot to initial data struct
-	go func() {
-		time.Sleep(time.Millisecond * 500)
-		u.getSpotAccountSnapShot(client, errCh)
-	}()
-	// update snapshot with steady interval
-	go func() {
-		snap := time.NewTicker(time.Second * time.Duration(u.HttpUpdateInterval))
-		defer snap.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-errs:
-				return
-			case <-snap.C:
-				u.spotsnapShoted = false
-				u.getSpotAccountSnapShot(client, errCh)
-			default:
-				time.Sleep(time.Second)
-			}
-		}
-	}()
+	if err := u.getSpotAccountSnapShot(client); err != nil {
+		return
+	}
 	// self check
 	go func() {
 		check := time.NewTicker(time.Second * 10)
@@ -157,7 +149,7 @@ func (u *SpotUserDataBranch) maintainSpotUserData(
 			select {
 			case <-ctx.Done():
 				return
-			case <-errs:
+			case <-innerErr:
 				return
 			case <-check.C:
 				last := u.lastUpdateTime()
@@ -175,29 +167,17 @@ func (u *SpotUserDataBranch) maintainSpotUserData(
 		case <-ctx.Done():
 			return
 		case <-(*errCh):
-			errs <- errors.New("restart")
+			innerErr <- errors.New("restart")
 			return
 		default:
-			if !u.spotsnapShoted {
-				time.Sleep(time.Second)
-				continue
-			}
 			message := <-(*userData)
 			event, ok := message["e"].(string)
 			if !ok {
 				continue
 			}
-			eventTime := decimal.NewFromFloat(message["E"].(float64)).IntPart()
-			lastTime, err := TimeFromUnixTimestampInt(eventTime)
-			if err != nil {
-				continue
-			}
-			if !lastTime.After(u.lastUpdateTime()) {
-				continue
-			}
 			switch event {
 			case "outboundAccountPosition":
-				u.updateSpotAccountData(&message, lastTime)
+				u.updateSpotAccountData(&message)
 			case "balanceUpdate":
 				// next stage, no use for now
 			default:
@@ -213,7 +193,7 @@ func (u *SpotUserDataBranch) lastUpdateTime() time.Time {
 	return u.spotAccount.LastUpdated
 }
 
-func (u *SpotUserDataBranch) updateSpotAccountData(message *map[string]interface{}, eventTime time.Time) {
+func (u *SpotUserDataBranch) updateSpotAccountData(message *map[string]interface{}) {
 	array, ok := (*message)["B"].([]interface{})
 	if !ok {
 		return
@@ -241,7 +221,7 @@ func (u *SpotUserDataBranch) updateSpotAccountData(message *map[string]interface
 			if bal.Asset == asset {
 				u.spotAccount.Data.Balances[idx].Free = free
 				u.spotAccount.Data.Balances[idx].Locked = lock
-				u.spotAccount.LastUpdated = eventTime
+				u.spotAccount.LastUpdated = time.Now()
 				return
 			}
 		}
@@ -254,6 +234,7 @@ func (c *Client) bNNUserData(ctx context.Context, product, listenKey string, log
 	w.Logger = logger
 	w.OnErr = false
 	var buffer bytes.Buffer
+	innerErr := make(chan error, 1)
 	switch product {
 	case "swap":
 		buffer.WriteString("wss://fstream3.binance.com/ws/")
@@ -280,11 +261,15 @@ func (c *Client) bNNUserData(ctx context.Context, product, listenKey string, log
 			select {
 			case <-ctx.Done():
 				return
+			case <-innerErr:
+				return
 			case <-putKey.C:
 				if err := c.PutListenKeyHub(product, listenKey); err != nil {
 					// time out in 1 sec
 					w.Conn.SetReadDeadline(time.Now().Add(time.Second))
+					return
 				}
+				w.Conn.SetReadDeadline(time.Now().Add(time.Second * duration))
 			default:
 				time.Sleep(time.Second)
 			}
@@ -302,6 +287,7 @@ func (c *Client) bNNUserData(ctx context.Context, product, listenKey string, log
 				w.OutBinanceErr()
 				message := "Binance User Data reconnect..."
 				log.Println(message)
+				innerErr <- errors.New("restart")
 				return errors.New(message)
 			}
 			_, buf, err := conn.ReadMessage()
@@ -309,6 +295,7 @@ func (c *Client) bNNUserData(ctx context.Context, product, listenKey string, log
 				w.OutBinanceErr()
 				message := "Binance User Data reconnect..."
 				log.Println(message)
+				innerErr <- errors.New("restart")
 				return errors.New(message)
 			}
 			res, err1 := DecodingMap(buf, logger)
@@ -316,11 +303,13 @@ func (c *Client) bNNUserData(ctx context.Context, product, listenKey string, log
 				w.OutBinanceErr()
 				message := "Binance User Data reconnect..."
 				log.Println(message, err1)
+				innerErr <- errors.New("restart")
 				return err1
 			}
 			// insert to chan
 			*mainCh <- res
 			if err := w.Conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
+				innerErr <- errors.New("restart")
 				return err
 			}
 		}
