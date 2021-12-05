@@ -505,24 +505,30 @@ func localOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch
 	ctx, cancel := context.WithCancel(context.Background())
 	o.cancel = &cancel
 	bookticker := make(chan map[string]interface{}, 50)
-	errCh := make(chan error, 5)
+	errCh := make(chan error, 1)
 	symbol = strings.ToUpper(symbol)
 	// stream orderbook
+	orderBookErr := make(chan error, 1)
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				if err := binanceSocket(ctx, product, symbol, "@depth@100ms", logger, &bookticker); err == nil {
+				if err := binanceSocket(ctx, product, symbol, "@depth@100ms", logger, &bookticker, &orderBookErr); err == nil {
 					return
+				} else {
+					if !strings.Contains(err.Error(), "reconnect because of time out") {
+						errCh <- errors.New("Reconnect websocket")
+					}
+					logger.Warningf("Reconnect %s %s orderbook stream.\n", symbol, product)
+					time.Sleep(time.Second)
 				}
-				errCh <- errors.New("Reconnect websocket")
-				time.Sleep(time.Second)
 			}
 		}
 	}()
 	// stream trade
+	tradeErr := make(chan error, 1)
 	var tradeChannel string
 	switch product {
 	case "spot":
@@ -536,11 +542,15 @@ func localOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch
 			case <-ctx.Done():
 				return
 			default:
-				if err := binanceSocket(ctx, product, symbol, tradeChannel, logger, &bookticker); err == nil {
+				if err := binanceSocket(ctx, product, symbol, tradeChannel, logger, &bookticker, &tradeErr); err == nil {
 					return
+				} else {
+					if !strings.Contains(err.Error(), "reconnect because of time out") {
+						errCh <- errors.New("Reconnect websocket")
+					}
+					logger.Warningf("Reconnect %s %s trade stream.\n", symbol, product)
+					time.Sleep(time.Second)
 				}
-				errCh <- errors.New("Reconnect websocket")
-				time.Sleep(time.Second)
 			}
 		}
 	}()
@@ -550,7 +560,7 @@ func localOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch
 			case <-ctx.Done():
 				return
 			default:
-				o.maintainOrderBook(ctx, product, symbol, &bookticker, &errCh)
+				o.maintainOrderBook(ctx, product, symbol, &bookticker, &errCh, &orderBookErr, &tradeErr)
 				logger.Warningf("Refreshing %s %s local orderbook.\n", symbol, product)
 				time.Sleep(time.Second)
 			}
@@ -574,11 +584,14 @@ func (o *OrderBookBranch) maintainOrderBook(
 	product, symbol string,
 	bookticker *chan map[string]interface{},
 	errCh *chan error,
+	orderBookErr *chan error,
+	tradeErr *chan error,
 ) {
 	var storage []map[string]interface{}
 	var linked bool = false
 	o.snapShoted = false
 	o.lastUpdatedId = decimal.NewFromInt(0)
+	lastUpdate := time.Now()
 	go func() {
 		time.Sleep(time.Second)
 		if err := o.GetOrderBookSnapShot(product, symbol); err != nil {
@@ -591,8 +604,7 @@ func (o *OrderBookBranch) maintainOrderBook(
 			return
 		case <-(*errCh):
 			return
-		default:
-			message := <-(*bookticker)
+		case message := <-(*bookticker):
 			event, ok := message["e"].(string)
 			if !ok {
 				continue
@@ -630,6 +642,9 @@ func (o *OrderBookBranch) maintainOrderBook(
 						*errCh <- err
 					}
 				}
+				// update last update
+				lastUpdate = time.Now()
+
 			default:
 				st := FormatingTimeStamp(message["T"].(float64))
 				price, _ := decimal.NewFromString(message["p"].(string))
@@ -645,6 +660,15 @@ func (o *OrderBookBranch) maintainOrderBook(
 				o.LocateTradeImpact(side, price, size, st)
 				o.RenewTradeImpact()
 			}
+		default:
+			if time.Now().After(lastUpdate.Add(time.Second * 10)) {
+				// 10 sec without updating
+				err := errors.New("reconnect because of time out")
+				(*orderBookErr) <- err
+				(*tradeErr) <- err
+				return
+			}
+			time.Sleep(time.Millisecond * 100)
 		}
 	}
 }
@@ -772,7 +796,7 @@ func DecodingMap(message []byte, logger *log.Logger) (res map[string]interface{}
 	return res, nil
 }
 
-func binanceSocket(ctx context.Context, product, symbol, channel string, logger *log.Logger, mainCh *chan map[string]interface{}) error {
+func binanceSocket(ctx context.Context, product, symbol, channel string, logger *log.Logger, mainCh *chan map[string]interface{}, reCh *chan error) error {
 	var w wS
 	var duration time.Duration = 30
 	w.Channel = channel
@@ -802,6 +826,8 @@ func binanceSocket(ctx context.Context, product, symbol, channel string, logger 
 		select {
 		case <-ctx.Done():
 			return nil
+		case err := <-(*reCh):
+			return err
 		default:
 			if w.Conn == nil {
 				d := w.OutBinanceErr()

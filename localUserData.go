@@ -41,7 +41,6 @@ func (c *Client) SpotUserData(logger *log.Logger) *SpotUserDataBranch {
 	return user
 }
 
-// timeout in 5 sec
 func (u *SpotUserDataBranch) SpotAccount() *SpotAccountResponse {
 	u.spotAccount.RLock()
 	defer u.spotAccount.RUnlock()
