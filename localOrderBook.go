@@ -798,7 +798,7 @@ func DecodingMap(message []byte, logger *log.Logger) (res map[string]interface{}
 
 func binanceSocket(ctx context.Context, product, symbol, channel string, logger *log.Logger, mainCh *chan map[string]interface{}, reCh *chan error) error {
 	var w wS
-	var duration time.Duration = 30
+	var duration time.Duration = 300
 	w.Channel = channel
 	w.Logger = logger
 	w.OnErr = false

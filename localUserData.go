@@ -15,7 +15,6 @@ import (
 
 type SpotUserDataBranch struct {
 	spotAccount spotAccountBranch
-
 	cancel             *context.CancelFunc
 	HttpUpdateInterval int
 }
