@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func (b *Client) SpotPlaceOrder(symbol, side string, price, size float64, orderType, timeInforce string) (*SpotOrderResponse, error) {
+func (b *Client) SpotPlaceOrder(symbol, side string, price, size string, orderType, timeInforce string) (*SpotOrderResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	uside := strings.ToUpper(side)
 	utype := strings.ToUpper(orderType)
@@ -57,12 +57,12 @@ func (b *Client) SpotPlaceOrderMarket(symbol, side string, size float64, clientI
 }
 
 type PlaceOrderOpts struct {
-	Symbol      string  `url:"symbol"`
-	Price       float64 `url:"price"`
-	Qty         float64 `url:"quantity"`
-	TimeInForce string  `url:"timeInForce"`
-	Type        string  `url:"type"`
-	Side        string  `url:"side"`
+	Symbol      string `url:"symbol"`
+	Price       string `url:"price"`
+	Qty         string `url:"quantity"`
+	TimeInForce string `url:"timeInForce"`
+	Type        string `url:"type"`
+	Side        string `url:"side"`
 }
 
 type PlaceOrderOptsMarket struct {
