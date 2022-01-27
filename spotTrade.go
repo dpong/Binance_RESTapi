@@ -35,7 +35,7 @@ func (b *Client) SpotPlaceOrder(symbol, side string, price, size string, orderTy
 	return resp, nil
 }
 
-func (b *Client) SpotPlaceOrderMarket(symbol, side string, size float64, clientID string) (*SpotOrderResponse, error) {
+func (b *Client) SpotPlaceOrderMarket(symbol, side string, size string, clientID string) (*SpotOrderResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	uside := strings.ToUpper(side)
 	opts := PlaceOrderOptsMarket{
@@ -66,11 +66,11 @@ type PlaceOrderOpts struct {
 }
 
 type PlaceOrderOptsMarket struct {
-	Symbol   string  `url:"symbol"`
-	Qty      float64 `url:"quantity"`
-	Type     string  `url:"type"`
-	Side     string  `url:"side"`
-	ClientID string  `url:"newClientOrderId,omitempty"`
+	Symbol   string `url:"symbol"`
+	Qty      string `url:"quantity"`
+	Type     string `url:"type"`
+	Side     string `url:"side"`
+	ClientID string `url:"newClientOrderId,omitempty"`
 }
 
 type SpotOrderResponse struct {

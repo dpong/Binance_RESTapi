@@ -498,7 +498,7 @@ func (o *OrderBookBranch) SetImpactCumRange(toLevel int) {
 	o.toLevel = toLevel - 1
 }
 
-func localOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch {
+func localOrderBook(product, symbol string, logger *log.Logger, streamTrade bool) *OrderBookBranch {
 	var o OrderBookBranch
 	o.SetLookBackSec(5)
 	o.SetImpactCumRange(20)
@@ -529,31 +529,33 @@ func localOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch
 	}()
 	// stream trade
 	tradeErr := make(chan error, 1)
-	var tradeChannel string
-	switch product {
-	case "spot":
-		tradeChannel = "@trade"
-	case "swap":
-		tradeChannel = "@aggTrade"
-	}
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				if err := binanceSocket(ctx, product, symbol, tradeChannel, logger, &bookticker, &tradeErr); err == nil {
+	if streamTrade {
+		var tradeChannel string
+		switch product {
+		case "spot":
+			tradeChannel = "@trade"
+		case "swap":
+			tradeChannel = "@aggTrade"
+		}
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
 					return
-				} else {
-					if !strings.Contains(err.Error(), "reconnect because of time out") {
-						errCh <- errors.New("Reconnect websocket")
+				default:
+					if err := binanceSocket(ctx, product, symbol, tradeChannel, logger, &bookticker, &tradeErr); err == nil {
+						return
+					} else {
+						if !strings.Contains(err.Error(), "reconnect because of time out") {
+							errCh <- errors.New("Reconnect websocket")
+						}
+						logger.Warningf("Reconnect %s %s trade stream.\n", symbol, product)
+						time.Sleep(time.Second)
 					}
-					logger.Warningf("Reconnect %s %s trade stream.\n", symbol, product)
-					time.Sleep(time.Second)
 				}
 			}
-		}
-	}()
+		}()
+	}
 	go func() {
 		for {
 			select {
@@ -570,13 +572,13 @@ func localOrderBook(product, symbol string, logger *log.Logger) *OrderBookBranch
 }
 
 // default with look back 5 sec, impact range from 0 to 10 levels of the orderbook
-func SpotLocalOrderBook(symbol string, logger *log.Logger) *OrderBookBranch {
-	return localOrderBook("spot", symbol, logger)
+func SpotLocalOrderBook(symbol string, logger *log.Logger, streamTrade bool) *OrderBookBranch {
+	return localOrderBook("spot", symbol, logger, streamTrade)
 }
 
 // default with look back 5 sec, impact range from 0 to 10 levels of the orderbook
-func SwapLocalOrderBook(symbol string, logger *log.Logger) *OrderBookBranch {
-	return localOrderBook("swap", symbol, logger)
+func SwapLocalOrderBook(symbol string, logger *log.Logger, streamTrade bool) *OrderBookBranch {
+	return localOrderBook("swap", symbol, logger, streamTrade)
 }
 
 func (o *OrderBookBranch) maintainOrderBook(

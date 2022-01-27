@@ -5,29 +5,29 @@ import (
 	"strings"
 )
 
-type PlaceOrderOptsFuture struct {
-	Symbol      string  `url:"symbol"`
-	Price       float64 `url:"price"`
-	Qty         float64 `url:"quantity"`
-	TimeInForce string  `url:"timeInForce"`
-	Type        string  `url:"type"`
-	Side        string  `url:"side"`
-	ReduceOnly  string  `url:"reduceOnly"`
+type PlaceOrderOptsSwap struct {
+	Symbol      string `url:"symbol"`
+	Price       string `url:"price"`
+	Qty         string `url:"quantity"`
+	TimeInForce string `url:"timeInForce"`
+	Type        string `url:"type"`
+	Side        string `url:"side"`
+	ReduceOnly  string `url:"reduceOnly"`
 }
 
-type PlaceOrderOptsFutureMarket struct {
-	Symbol     string  `url:"symbol"`
-	Qty        float64 `url:"quantity"`
-	Type       string  `url:"type"`
-	Side       string  `url:"side"`
-	ReduceOnly string  `url:"reduceOnly"`
-	ClientID   string  `url:"newClientOrderId, omitempty"`
+type PlaceOrderOptsSwapMarket struct {
+	Symbol     string `url:"symbol"`
+	Qty        string `url:"quantity"`
+	Type       string `url:"type"`
+	Side       string `url:"side"`
+	ReduceOnly string `url:"reduceOnly"`
+	ClientID   string `url:"newClientOrderId, omitempty"`
 }
 
-func (b *Client) FuturePlaceOrderMarket(symbol, side string, size float64, reduceOnly, clientID string) (*FutureOrderResponse, error) {
+func (b *Client) SwapPlaceOrderMarket(symbol, side string, size string, reduceOnly, clientID string) (*FutureOrderResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	uside := strings.ToUpper(side)
-	opts := PlaceOrderOptsFutureMarket{
+	opts := PlaceOrderOptsSwapMarket{
 		Symbol:     usymbol,
 		Side:       uside,
 		Qty:        size,
@@ -49,7 +49,7 @@ func (b *Client) FuturePlaceOrderMarket(symbol, side string, size float64, reduc
 	return resp, nil
 }
 
-func (b *Client) FuturePlaceOrder(symbol, side string, price, size float64, orderType, timeInforce, reduceOnly string) (*FutureOrderResponse, error) {
+func (b *Client) SwapPlaceOrder(symbol, side string, price, size string, orderType, timeInforce, reduceOnly string) (*FutureOrderResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	uside := strings.ToUpper(side)
 	utype := strings.ToUpper(orderType)
@@ -59,7 +59,7 @@ func (b *Client) FuturePlaceOrder(symbol, side string, price, size float64, orde
 	} else {
 		utif = strings.ToUpper(timeInforce)
 	}
-	opts := PlaceOrderOptsFuture{
+	opts := PlaceOrderOptsSwap{
 		Symbol:      usymbol,
 		Side:        uside,
 		Price:       price,
@@ -105,7 +105,7 @@ type FutureOrderResponse struct {
 	WorkingType   string `json:"workingType"`
 }
 
-func (b *Client) FutureCancelOrder(symbol string, oid int) (*FutureOrderResponse, error) {
+func (b *Client) SwapCancelOrder(symbol string, oid int) (*FutureOrderResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	opts := OIDOpts{
 		Symbol: usymbol,
@@ -123,7 +123,7 @@ func (b *Client) FutureCancelOrder(symbol string, oid int) (*FutureOrderResponse
 	return resp, nil
 }
 
-func (b *Client) FutureOpenOrder(symbol string, oid int) (*FutureOrderResponse, error) {
+func (b *Client) SwapOpenOrder(symbol string, oid int) (*FutureOrderResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	opts := OIDOpts{
 		Symbol: usymbol,
@@ -167,7 +167,7 @@ type FutureQueryOrderResonse struct {
 	PriceProtect  bool   `json:"priceProtect"`
 }
 
-func (b *Client) FutureQueryOrder(symbol string, oid int) (*FutureQueryOrderResonse, error) {
+func (b *Client) SwapQueryOrder(symbol string, oid int) (*FutureQueryOrderResonse, error) {
 	usymbol := strings.ToUpper(symbol)
 	opts := OIDOpts{
 		Symbol: usymbol,
