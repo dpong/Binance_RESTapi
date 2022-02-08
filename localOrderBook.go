@@ -864,7 +864,7 @@ func binanceSocket(ctx context.Context, product, symbol, channel string, logger 
 	case "spot":
 		buffer.WriteString("wss://stream.binance.com:9443/ws/")
 	case "swap":
-		buffer.WriteString("wss://fstream3.binance.com/ws/")
+		buffer.WriteString("wss://fstream.binance.com/ws/")
 	}
 	buffer.WriteString(strings.ToLower(symbol))
 	buffer.WriteString(w.Channel)
@@ -879,13 +879,15 @@ func binanceSocket(ctx context.Context, product, symbol, channel string, logger 
 	if err := w.Conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
 		return err
 	}
+	read := time.NewTicker(time.Millisecond * 50)
+	defer read.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case err := <-(*reCh):
 			return err
-		default:
+		case <-read.C:
 			if w.Conn == nil {
 				d := w.OutBinanceErr()
 				*mainCh <- d
@@ -920,6 +922,8 @@ func binanceSocket(ctx context.Context, product, symbol, channel string, logger 
 			if err := w.Conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
 				return err
 			}
+		default:
+			time.Sleep(time.Millisecond * 10)
 		}
 	}
 }

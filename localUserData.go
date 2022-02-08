@@ -14,7 +14,7 @@ import (
 )
 
 type SpotUserDataBranch struct {
-	spotAccount spotAccountBranch
+	spotAccount        spotAccountBranch
 	cancel             *context.CancelFunc
 	HttpUpdateInterval int
 }
@@ -273,6 +273,8 @@ func (c *Client) bNNUserData(ctx context.Context, product, listenKey string, log
 			}
 		}
 	}()
+	read := time.NewTicker(time.Millisecond * 50)
+	defer read.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -280,7 +282,7 @@ func (c *Client) bNNUserData(ctx context.Context, product, listenKey string, log
 			message := "Binance User Data closed..."
 			log.Println(message)
 			return errors.New(message)
-		default:
+		case <-read.C:
 			if w.Conn == nil {
 				w.OutBinanceErr()
 				message := "Binance User Data reconnect..."
@@ -310,6 +312,8 @@ func (c *Client) bNNUserData(ctx context.Context, product, listenKey string, log
 				innerErr <- errors.New("restart")
 				return err
 			}
+		default:
+			time.Sleep(time.Millisecond * 10)
 		}
 	}
 }
