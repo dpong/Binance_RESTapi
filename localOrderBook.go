@@ -729,7 +729,9 @@ func (o *OrderBookBranch) maintainOrderBook(
 				// 10 sec without updating
 				err := errors.New("reconnect because of time out")
 				(*orderBookErr) <- err
-				(*tradeErr) <- err
+				if streamTrade {
+					(*tradeErr) <- err
+				}
 				return err
 			}
 			time.Sleep(time.Millisecond * 100)
