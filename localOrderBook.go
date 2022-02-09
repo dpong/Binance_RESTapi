@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -301,10 +302,14 @@ func (o *OrderBookBranch) DealWithAskPriceLevel(price, qty decimal.Decimal) {
 	}
 }
 
-func (o *OrderBookBranch) RefreshLocalOrderBook(err error) {
+func (o *OrderBookBranch) RefreshLocalOrderBook(err error) error {
 	if o.IfCanRefresh() {
+		if len(o.reCh) == cap(o.reCh) {
+			return errors.New("refresh channel is full, please check it up")
+		}
 		o.reCh <- err
 	}
+	return nil
 }
 
 func (o *OrderBookBranch) Close() {
@@ -609,7 +614,7 @@ func localOrderBook(product, symbol string, logger *log.Logger, streamTrade bool
 			case <-ctx.Done():
 				return
 			default:
-				err := o.maintainOrderBook(ctx, product, symbol, &bookticker, &errCh, &orderBookErr, &tradeErr)
+				err := o.maintainOrderBook(ctx, product, symbol, streamTrade, &bookticker, &errCh, &orderBookErr, &tradeErr)
 				if err == nil {
 					return
 				}
@@ -634,6 +639,7 @@ func SwapLocalOrderBook(symbol string, logger *log.Logger, streamTrade bool) *Or
 func (o *OrderBookBranch) maintainOrderBook(
 	ctx context.Context,
 	product, symbol string,
+	streamTrade bool,
 	bookticker *chan map[string]interface{},
 	errCh *chan error,
 	orderBookErr *chan error,
@@ -659,7 +665,9 @@ func (o *OrderBookBranch) maintainOrderBook(
 		case err := <-o.reCh:
 			errSend := errors.New("reconnect because of reCh send")
 			(*orderBookErr) <- errSend
-			(*tradeErr) <- errSend
+			if streamTrade {
+				(*tradeErr) <- errSend
+			}
 			return err
 		case message := <-(*bookticker):
 			event, ok := message["e"].(string)
