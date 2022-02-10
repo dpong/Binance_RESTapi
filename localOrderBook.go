@@ -16,7 +16,7 @@ import (
 type OrderBookBranch struct {
 	bids          bookBranch
 	asks          bookBranch
-	lastUpdatedId decimal.Decimal
+	lastUpdatedId lastUpdateIdbranch
 	snapShoted    bool
 	cancel        *context.CancelFunc
 	buyTrade      tradeImpact
@@ -26,6 +26,11 @@ type OrderBookBranch struct {
 	toLevel       int
 	reCh          chan error
 	lastRefresh   lastRefreshBranch
+}
+
+type lastUpdateIdbranch struct {
+	mux sync.RWMutex
+	ID  decimal.Decimal
 }
 
 type lastRefreshBranch struct {
@@ -57,6 +62,18 @@ type wS struct {
 	Logger        *log.Logger
 	Conn          *websocket.Conn
 	LastUpdatedId decimal.Decimal
+}
+
+func (o *OrderBookBranch) UpdateLastUpdateId(id decimal.Decimal) {
+	o.lastUpdatedId.mux.Lock()
+	defer o.lastUpdatedId.mux.Unlock()
+	o.lastUpdatedId.ID = id
+}
+
+func (o *OrderBookBranch) ReadLastUpdateId() decimal.Decimal {
+	o.lastUpdatedId.mux.RLock()
+	defer o.lastUpdatedId.mux.RUnlock()
+	return o.lastUpdatedId.ID
 }
 
 func (o *OrderBookBranch) IfCanRefresh() bool {
@@ -99,7 +116,7 @@ func (o *OrderBookBranch) GetOrderBookSnapShot(product, symbol string) error {
 			o.asks.Micro = append(o.asks.Micro, micro)
 		}
 		o.asks.mux.Unlock()
-		o.lastUpdatedId = decimal.NewFromInt(int64(res.LastUpdateID))
+		o.UpdateLastUpdateId(decimal.NewFromInt(int64(res.LastUpdateID)))
 	case "swap":
 		res, err := client.SwapDepth(symbol, 1000)
 		if err != nil {
@@ -125,7 +142,7 @@ func (o *OrderBookBranch) GetOrderBookSnapShot(product, symbol string) error {
 			o.asks.Micro = append(o.asks.Micro, micro)
 		}
 		o.asks.mux.Unlock()
-		o.lastUpdatedId = decimal.NewFromInt(int64(res.LastUpdateID))
+		o.UpdateLastUpdateId(decimal.NewFromInt(int64(res.LastUpdateID)))
 	}
 	o.snapShoted = true
 	return nil
@@ -544,6 +561,8 @@ func ReStartMainSeesionErrHub(err string) bool {
 		return false
 	case strings.Contains(err, "reconnect because of reCh send"):
 		return false
+	case strings.Contains(err, "reconnect because of snapshot fail"):
+		return false
 	}
 	return true
 }
@@ -647,12 +666,14 @@ func (o *OrderBookBranch) maintainOrderBook(
 	var storage []map[string]interface{}
 	var linked bool = false
 	o.snapShoted = false
-	o.lastUpdatedId = decimal.NewFromInt(0)
+	o.UpdateLastUpdateId(decimal.Zero)
 	lastUpdate := time.Now()
+	snapshotErr := make(chan error, 1)
 	go func() {
-		time.Sleep(time.Second)
+		// avoid latancy issue
+		time.Sleep(time.Second * 3)
 		if err := o.GetOrderBookSnapShot(product, symbol); err != nil {
-			*errCh <- err
+			snapshotErr <- err
 		}
 	}()
 	for {
@@ -660,6 +681,13 @@ func (o *OrderBookBranch) maintainOrderBook(
 		case <-ctx.Done():
 			return nil
 		case err := <-(*errCh):
+			return err
+		case err := <-snapshotErr:
+			errSend := errors.New("reconnect because of snapshot fail")
+			(*orderBookErr) <- errSend
+			if streamTrade {
+				(*tradeErr) <- errSend
+			}
 			return err
 		case err := <-o.reCh:
 			errSend := errors.New("reconnect because of reCh send")
@@ -684,11 +712,11 @@ func (o *OrderBookBranch) maintainOrderBook(
 						switch product {
 						case "spot":
 							if err := o.SpotUpdateJudge(&data, &linked); err != nil {
-								*errCh <- err
+								return err
 							}
 						case "swap":
 							if err := o.SwapUpdateJudge(&data, &linked); err != nil {
-								*errCh <- err
+								return err
 							}
 						}
 					}
@@ -699,16 +727,15 @@ func (o *OrderBookBranch) maintainOrderBook(
 				switch product {
 				case "spot":
 					if err := o.SpotUpdateJudge(&message, &linked); err != nil {
-						*errCh <- err
+						return err
 					}
 				case "swap":
 					if err := o.SwapUpdateJudge(&message, &linked); err != nil {
-						*errCh <- err
+						return err
 					}
 				}
 				// update last update
 				lastUpdate = time.Now()
-
 			default:
 				st := FormatingTimeStamp(message["T"].(float64))
 				price, _ := decimal.NewFromString(message["p"].(string))
@@ -803,18 +830,25 @@ func (o *OrderBookBranch) RenewTradeImpact() {
 func (o *OrderBookBranch) SpotUpdateJudge(message *map[string]interface{}, linked *bool) error {
 	headID := decimal.NewFromFloat((*message)["U"].(float64))
 	tailID := decimal.NewFromFloat((*message)["u"].(float64))
-	snapID := o.lastUpdatedId.Add(decimal.NewFromInt(1))
+	baseID := o.ReadLastUpdateId()
+	snapID := baseID.Add(decimal.NewFromInt(1))
 	if !(*linked) {
-		//U <= lastUpdateId+1 AND u >= lastUpdateId+1.
-		if headID.LessThanOrEqual(snapID) && tailID.GreaterThanOrEqual(snapID) {
+		switch {
+		case headID.LessThanOrEqual(snapID) && tailID.GreaterThanOrEqual(snapID):
+			//U <= lastUpdateId+1 AND u >= lastUpdateId+1.
 			(*linked) = true
 			o.UpdateNewComing(message)
-			o.lastUpdatedId = tailID
+			o.UpdateLastUpdateId(tailID)
+		case tailID.LessThan(snapID):
+			// drop pre data
+		default:
+			// latancy issue, reconnect
+			return errors.New("refresh.")
 		}
 	} else {
 		if headID.Equal(snapID) {
 			o.UpdateNewComing(message)
-			o.lastUpdatedId = tailID
+			o.UpdateLastUpdateId(tailID)
 		} else {
 			return errors.New("refresh.")
 		}
@@ -826,7 +860,7 @@ func (o *OrderBookBranch) SwapUpdateJudge(message *map[string]interface{}, linke
 	headID := decimal.NewFromFloat((*message)["U"].(float64))
 	tailID := decimal.NewFromFloat((*message)["u"].(float64))
 	puID := decimal.NewFromFloat((*message)["pu"].(float64))
-	snapID := o.lastUpdatedId
+	snapID := o.ReadLastUpdateId()
 	if !(*linked) {
 		// drop u is < lastUpdateId
 		if tailID.LessThan(snapID) {
@@ -836,13 +870,13 @@ func (o *OrderBookBranch) SwapUpdateJudge(message *map[string]interface{}, linke
 		if headID.LessThanOrEqual(snapID) && tailID.GreaterThanOrEqual(snapID) {
 			(*linked) = true
 			o.UpdateNewComing(message)
-			o.lastUpdatedId = tailID
+			o.UpdateLastUpdateId(tailID)
 		}
 	} else {
 		// new event's pu should be equal to the previous event's u
 		if puID.Equal(snapID) {
 			o.UpdateNewComing(message)
-			o.lastUpdatedId = tailID
+			o.UpdateLastUpdateId(tailID)
 		} else {
 			return errors.New("refresh.")
 		}
@@ -888,6 +922,7 @@ func binanceSocket(ctx context.Context, product, symbol, channel string, logger 
 	if err := w.Conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
 		return err
 	}
+	w.Conn.SetPingHandler(nil)
 	read := time.NewTicker(time.Millisecond * 50)
 	defer read.Stop()
 	for {
