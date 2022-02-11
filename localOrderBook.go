@@ -923,15 +923,13 @@ func binanceSocket(ctx context.Context, product, symbol, channel string, logger 
 		return err
 	}
 	w.Conn.SetPingHandler(nil)
-	read := time.NewTicker(time.Millisecond * 50)
-	defer read.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case err := <-(*reCh):
 			return err
-		case <-read.C:
+		default:
 			if w.Conn == nil {
 				d := w.OutBinanceErr()
 				*mainCh <- d
@@ -966,8 +964,6 @@ func binanceSocket(ctx context.Context, product, symbol, channel string, logger 
 			if err := w.Conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
 				return err
 			}
-		default:
-			time.Sleep(time.Millisecond * 10)
 		}
 	}
 }
@@ -979,6 +975,18 @@ func (w *wS) HandleBinanceSocketData(res map[string]interface{}, mainCh *chan ma
 	}
 	switch event {
 	case "depthUpdate":
+		if st, ok := res["E"].(float64); !ok {
+			m := w.OutBinanceErr()
+			*mainCh <- m
+			return errors.New("got nil when updating event time")
+		} else {
+			stamp := FormatingTimeStamp(st)
+			if time.Now().After(stamp.Add(time.Second * 5)) {
+				m := w.OutBinanceErr()
+				*mainCh <- m
+				return errors.New("websocket data delay more than 5 sec")
+			}
+		}
 		firstId := res["U"].(float64)
 		lastId := res["u"].(float64)
 		headID := decimal.NewFromFloat(firstId)
