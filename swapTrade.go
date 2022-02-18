@@ -81,16 +81,35 @@ func (b *Client) SwapPlaceOrder(symbol, side string, price, size string, orderTy
 }
 
 type PlaceBatchOrdersOptsSwap struct {
-	Orders []PlaceOrderOptsSwap `url:"batchOrders"`
+	OrderList string `url:"batchOrders"`
 }
 
-func (b *Client) SwapPlaceBatchOrders(opts PlaceBatchOrdersOptsSwap) (*FutureBatchOrdersResponse, error) {
-	res, err := b.do("future", http.MethodPost, "fapi/v1/batchOrders", opts, true, false)
+// max 5 orders per request
+func (b *Client) SwapPlaceBatchOrders(orders []PlaceOrderOptsSwap) (*FutureBatchOrdersResponse, error) {
+	opts := []map[string]interface{}{}
+	for _, order := range orders {
+		m := map[string]interface{}{}
+		m["symbol"] = strings.ToUpper(order.Symbol)
+		m["side"] = strings.ToUpper(order.Side)
+		m["type"] = strings.ToUpper(order.Type)
+		m["timeInForce"] = strings.ToUpper(order.TimeInForce)
+		m["price"] = order.Price
+		m["quantity"] = order.Qty
+		m["reduceOnly"] = strings.ToLower(order.ReduceOnly)
+		opts = append(opts, m)
+	}
+	out, err := json.Marshal(opts)
+	if err != nil {
+		return nil, err
+	}
+	input := PlaceBatchOrdersOptsSwap{}
+	input.OrderList = Bytes2String(out)
+	res, err := b.do("future", http.MethodPost, "fapi/v1/batchOrders", input, true, false)
 	if err != nil {
 		return nil, err
 	}
 	resp := FutureBatchOrdersResponse{}
-	err = json.Unmarshal(res, resp)
+	err = json.Unmarshal(res, &resp)
 	if err != nil {
 		return nil, err
 	}
@@ -169,21 +188,25 @@ func (b *Client) SwapCancelOrder(symbol string, oid int) (*FutureOrderResponse, 
 
 type OIDListOpts struct {
 	Symbol string `url:"symbol"`
-	Oid    []int  `url:"orderId"`
+	Oid    string `url:"orderIdList"`
 }
 
-func (b *Client) CancelBatchOrders(symbol string, oids []int) (*FutureBatchOrdersResponse, error) {
-	usymbol := strings.ToUpper(symbol)
+// max 10 order per request
+func (b *Client) SwapCancelBatchOrders(symbol string, oids []int) (*FutureBatchOrdersResponse, error) {
+	out, err := json.Marshal(oids)
+	if err != nil {
+		return nil, err
+	}
 	opts := OIDListOpts{
-		Symbol: usymbol,
-		Oid:    oids,
+		Symbol: strings.ToUpper(symbol),
+		Oid:    Bytes2String(out),
 	}
 	res, err := b.do("future", http.MethodDelete, "fapi/v1/batchOrders", opts, true, false)
 	if err != nil {
 		return nil, err
 	}
 	resp := FutureBatchOrdersResponse{}
-	err = json.Unmarshal(res, resp)
+	err = json.Unmarshal(res, &resp)
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/google/go-querystring/query"
 	jsoniter "github.com/json-iterator/go"
@@ -125,4 +126,8 @@ func TimeFromUnixTimestampInt(raw interface{}) (time.Time, error) {
 		return time.Time{}, errors.New(fmt.Sprintf("unable to parse, value not int64: %T", raw))
 	}
 	return time.Unix(0, ts*int64(time.Millisecond)), nil
+}
+
+func Bytes2String(b []byte) string {
+	return *(*string)(unsafe.Pointer(&b))
 }
