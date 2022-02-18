@@ -80,6 +80,23 @@ func (b *Client) SwapPlaceOrder(symbol, side string, price, size string, orderTy
 	return resp, nil
 }
 
+type PlaceBatchOrdersOptsSwap struct {
+	Orders []PlaceOrderOptsSwap `url:"batchOrders"`
+}
+
+func (b *Client) SwapPlaceBatchOrders(opts PlaceBatchOrdersOptsSwap) (*FutureBatchOrdersResponse, error) {
+	res, err := b.do("future", http.MethodPost, "fapi/v1/batchOrders", opts, true, false)
+	if err != nil {
+		return nil, err
+	}
+	resp := FutureBatchOrdersResponse{}
+	err = json.Unmarshal(res, resp)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 type FutureOrderResponse struct {
 	ClientOrderID string `json:"clientOrderId"`
 	CumQty        string `json:"cumQty"`
@@ -105,6 +122,33 @@ type FutureOrderResponse struct {
 	WorkingType   string `json:"workingType"`
 }
 
+type FutureBatchOrdersResponse []struct {
+	Clientorderid string `json:"clientOrderId,omitempty"`
+	Cumqty        string `json:"cumQty,omitempty"`
+	Cumquote      string `json:"cumQuote,omitempty"`
+	Executedqty   string `json:"executedQty,omitempty"`
+	Orderid       int    `json:"orderId,omitempty"`
+	Avgprice      string `json:"avgPrice,omitempty"`
+	Origqty       string `json:"origQty,omitempty"`
+	Price         string `json:"price,omitempty"`
+	Reduceonly    bool   `json:"reduceOnly,omitempty"`
+	Side          string `json:"side,omitempty"`
+	Positionside  string `json:"positionSide,omitempty"`
+	Status        string `json:"status,omitempty"`
+	Stopprice     string `json:"stopPrice,omitempty"`
+	Symbol        string `json:"symbol,omitempty"`
+	Timeinforce   string `json:"timeInForce,omitempty"`
+	Type          string `json:"type,omitempty"`
+	Origtype      string `json:"origType,omitempty"`
+	Activateprice string `json:"activatePrice,omitempty"`
+	Pricerate     string `json:"priceRate,omitempty"`
+	Updatetime    int64  `json:"updateTime,omitempty"`
+	Workingtype   string `json:"workingType,omitempty"`
+	Priceprotect  bool   `json:"priceProtect,omitempty"`
+	Code          int    `json:"code,omitempty"`
+	Msg           string `json:"msg,omitempty"`
+}
+
 func (b *Client) SwapCancelOrder(symbol string, oid int) (*FutureOrderResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	opts := OIDOpts{
@@ -121,6 +165,29 @@ func (b *Client) SwapCancelOrder(symbol string, oid int) (*FutureOrderResponse, 
 		return nil, err
 	}
 	return resp, nil
+}
+
+type OIDListOpts struct {
+	Symbol string `url:"symbol"`
+	Oid    []int  `url:"orderId"`
+}
+
+func (b *Client) CancelBatchOrders(symbol string, oids []int) (*FutureBatchOrdersResponse, error) {
+	usymbol := strings.ToUpper(symbol)
+	opts := OIDListOpts{
+		Symbol: usymbol,
+		Oid:    oids,
+	}
+	res, err := b.do("future", http.MethodDelete, "fapi/v1/batchOrders", opts, true, false)
+	if err != nil {
+		return nil, err
+	}
+	resp := FutureBatchOrdersResponse{}
+	err = json.Unmarshal(res, resp)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 func (b *Client) SwapOpenOrder(symbol string, oid int) (*FutureOrderResponse, error) {
