@@ -38,6 +38,11 @@ func New(key, secret, subaccount string) *Client {
 	}
 }
 
+// in milliseconds, default is 5000
+func (c *Client) SetRecvWindow(recvWindow int) {
+	c.window = recvWindow
+}
+
 func (c *Client) do(product, method, path string, data interface{}, sign bool, stream bool) (response []byte, err error) {
 	var ENDPOINT string
 	switch product {
