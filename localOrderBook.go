@@ -328,6 +328,60 @@ func (o *OrderBookBranch) RefreshLocalOrderBook(err error) error {
 	return nil
 }
 
+func (o *OrderBookBranch) GetImbalance(inlevel int) (decimal.Decimal, error) {
+	var bids, asks [][]string
+	errs := make(chan error, 5)
+	defer close(errs)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		o.bids.mux.RLock()
+		defer o.bids.mux.RUnlock()
+		if !o.snapShoted {
+			errs <- errors.New("not snapshoted")
+			return
+		}
+		if len(o.bids.Book) < inlevel {
+			errs <- errors.New("bid len is less then request")
+			return
+		}
+		bids = o.bids.Book[:inlevel]
+	}()
+	go func() {
+		defer wg.Done()
+		o.asks.mux.RLock()
+		defer o.asks.mux.RUnlock()
+		if !o.snapShoted {
+			errs <- errors.New("not snapshoted")
+			return
+		}
+		if len(o.asks.Book) < inlevel {
+			errs <- errors.New("ask len is less then request")
+			return
+		}
+		asks = o.asks.Book[:inlevel]
+	}()
+	wg.Wait()
+	if len(errs) != 0 {
+		err := <-errs
+		return decimal.Zero, err
+	}
+	var total, bqty, aqty decimal.Decimal
+	for i := 0; i < inlevel; i++ {
+		if len(bids[i]) < 2 || len(asks[i]) < 2 {
+			return decimal.Zero, errors.New("missing data for calculate imbalance")
+		}
+		bQ, _ := decimal.NewFromString(bids[i][1])
+		aQ, _ := decimal.NewFromString(asks[i][1])
+		bqty = bqty.Add(bQ)
+		aqty = aqty.Add(aQ)
+		total = total.Add(bQ.Add(aQ))
+	}
+	result := bqty.Sub(aqty).Div(total)
+	return result, nil
+}
+
 func (o *OrderBookBranch) Close() {
 	(*o.cancel)()
 	o.snapShoted = false
