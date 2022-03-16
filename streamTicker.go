@@ -89,7 +89,7 @@ func (s *StreamTickerBranch) GetBid() (price, qty string, ok bool) {
 	defer s.bid.mux.RUnlock()
 	price = s.bid.price
 	qty = s.bid.qty
-	if price == NullPrice {
+	if price == NullPrice || price == "" {
 		return price, qty, false
 	}
 	return price, qty, true
@@ -100,7 +100,7 @@ func (s *StreamTickerBranch) GetAsk() (price, qty string, ok bool) {
 	defer s.ask.mux.RUnlock()
 	price = s.ask.price
 	qty = s.ask.qty
-	if price == NullPrice {
+	if price == NullPrice || price == "" {
 		return price, qty, false
 	}
 	return price, qty, true
