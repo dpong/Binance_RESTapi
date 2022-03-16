@@ -66,7 +66,7 @@ func localStreamTicker(product, symbol string, logger *log.Logger) *StreamTicker
 				if err := s.maintainStreamTicker(ctx, product, symbol, &ticker, &errCh); err == nil {
 					return
 				} else {
-					logger.Warningf("Refreshing %s %s local orderbook with err: %s\n", symbol, product, err.Error())
+					logger.Warningf("Refreshing %s %s ticker stream with err: %s\n", symbol, product, err.Error())
 				}
 			}
 		}
