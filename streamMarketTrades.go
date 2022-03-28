@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/gorilla/websocket"
 )
@@ -24,11 +22,6 @@ type StreamMarketTradesBranch struct {
 	tradesBranch struct {
 		Trades []BnnTradeData
 		sync.Mutex
-	}
-
-	lastUpdatedTimestampBranch struct {
-		timestamp int64
-		mux       sync.RWMutex
 	}
 	logger *logrus.Logger
 }
@@ -96,7 +89,7 @@ func (o *StreamMarketTradesBranch) appendNewTrade(new *BnnTradeData) {
 	o.tradesBranch.Trades = append(o.tradesBranch.Trades, *new)
 }
 
-func (o StreamMarketTradesBranch) maintainSession(ctx context.Context, product, symbol string) {
+func (o *StreamMarketTradesBranch) maintainSession(ctx context.Context, product, symbol string) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -141,14 +134,8 @@ func (o *StreamMarketTradesBranch) maintain(ctx context.Context, product string,
 			if err != nil {
 				return err
 			}
-			var msgMap map[string]interface{}
-			err = json.Unmarshal(msg, &msgMap)
-			if err != nil {
+			if err := o.handleBnnTradeSocketMsg(msg); err != nil {
 				return err
-			}
-			errh := o.handleBnnTradeSocketMsg(msg)
-			if errh != nil {
-				return errh
 			}
 			if err := o.conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
 				return err
@@ -158,52 +145,19 @@ func (o *StreamMarketTradesBranch) maintain(ctx context.Context, product string,
 }
 
 func (o *StreamMarketTradesBranch) handleBnnTradeSocketMsg(msg []byte) error {
-	var msgMap map[string]interface{}
-	err := json.Unmarshal(msg, &msgMap)
+	var data BnnTradeData
+	err := json.Unmarshal(msg, &data)
 	if err != nil {
-		log.Println(err)
 		return errors.New("fail to unmarshal message")
 	}
-
-	event, ok := msgMap["e"]
-	if !ok {
-		return errors.New("fail to obtain message")
-	}
-
 	// distribute the msg
-	var err2 error
-	switch event {
+	switch data.Event {
 	case "subscribed":
 		//fmt.Println("websocket subscribed")
-	case "snapshot":
-		//err2 = o.parseOrderbookSnapshotMsg(msgMap)
 	case "trade":
-		err2 = o.parseTradeUpdateMsg(msg)
+		o.tradeChan <- data
 	default:
-		log.Println(msg)
+		// pass
 	}
-	if err2 != nil {
-		fmt.Println(err2, "err2")
-		return errors.New("fail to parse message")
-	}
-	return nil
-}
-
-func (o *StreamMarketTradesBranch) parseTradeUpdateMsg(msg []byte) error {
-	var tradeData BnnTradeData
-	json.Unmarshal(msg, &tradeData)
-
-	// extract data
-	if tradeData.Event != "trade" {
-		return errors.New("wrong channel")
-	}
-	if tradeData.Symbol != o.market {
-		return errors.New("wrong market")
-	}
-	o.tradeChan <- tradeData
-
-	o.lastUpdatedTimestampBranch.mux.Lock()
-	defer o.lastUpdatedTimestampBranch.mux.Unlock()
-	o.lastUpdatedTimestampBranch.timestamp = int64(tradeData.Timestamp)
 	return nil
 }
