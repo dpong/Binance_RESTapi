@@ -58,6 +58,13 @@ func (o *StreamMarketTradesBranch) GetTrades() []BnnTradeData {
 	return trades
 }
 
+func (o *StreamMarketTradesBranch) Close() {
+	(*o.cancel)()
+	o.tradesBranch.Lock()
+	defer o.tradesBranch.Unlock()
+	o.tradesBranch.Trades = []BnnTradeData{}
+}
+
 func tradeStream(symbol string, logger *logrus.Logger, product string) *StreamMarketTradesBranch {
 	o := new(StreamMarketTradesBranch)
 	ctx, cancel := context.WithCancel(context.Background())
