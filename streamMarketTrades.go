@@ -48,11 +48,13 @@ type BnnTradeData struct {
 }
 
 func SwapTradeStream(symbol string, logger *logrus.Logger) *StreamMarketTradesBranch {
-	return tradeStream(symbol, logger, "swap")
+	Usymbol := strings.ToUpper(symbol)
+	return tradeStream(Usymbol, logger, "swap")
 }
 
 func SpotTradeStream(symbol string, logger *logrus.Logger) *StreamMarketTradesBranch {
-	return tradeStream(symbol, logger, "spot")
+	Usymbol := strings.ToUpper(symbol)
+	return tradeStream(Usymbol, logger, "spot")
 }
 
 func (o *StreamMarketTradesBranch) GetTrades() []BnnTradeData {
@@ -70,27 +72,9 @@ func tradeStream(symbol string, logger *logrus.Logger, product string) *StreamMa
 	o.market = symbol
 	o.tradeChan = make(chan BnnTradeData, 100)
 	o.logger = logger
-	go o.maintain(ctx, product, symbol)
+	go o.maintainSession(ctx, product, symbol)
 	go o.listen(ctx)
-
-	time.Sleep(1 * time.Second)
-	go o.pingIt(ctx)
-
 	return o
-}
-
-func (o *StreamMarketTradesBranch) pingIt(ctx context.Context) {
-	ping := time.NewTicker(time.Second * 60)
-	defer ping.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ping.C:
-			message := []byte("pong")
-			o.conn.WriteMessage(websocket.TextMessage, message)
-		}
-	}
 }
 
 func (o *StreamMarketTradesBranch) listen(ctx context.Context) {
@@ -113,7 +97,6 @@ func (o *StreamMarketTradesBranch) appendNewTrade(new *BnnTradeData) {
 }
 
 func (o StreamMarketTradesBranch) maintainSession(ctx context.Context, product, symbol string) {
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -129,6 +112,7 @@ func (o StreamMarketTradesBranch) maintainSession(ctx context.Context, product, 
 }
 
 func (o *StreamMarketTradesBranch) maintain(ctx context.Context, product string, symbol string) error {
+	var duration time.Duration = 30
 	var buffer bytes.Buffer
 	switch product {
 	case "spot":
@@ -144,6 +128,9 @@ func (o *StreamMarketTradesBranch) maintain(ctx context.Context, product string,
 	}
 	o.conn = conn
 	defer o.conn.Close()
+	if err := o.conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
+		return err
+	}
 	o.conn.SetPingHandler(nil)
 	for {
 		select {
@@ -162,6 +149,9 @@ func (o *StreamMarketTradesBranch) maintain(ctx context.Context, product string,
 			errh := o.handleBnnTradeSocketMsg(msg)
 			if errh != nil {
 				return errh
+			}
+			if err := o.conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
+				return err
 			}
 		} // end select
 	} // end for
