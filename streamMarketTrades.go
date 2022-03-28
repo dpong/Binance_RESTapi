@@ -80,18 +80,17 @@ func tradeStream(symbol string, logger *logrus.Logger, product string) *StreamMa
 }
 
 func (o *StreamMarketTradesBranch) pingIt(ctx context.Context) {
-	go func() {
-		for {
-			time.Sleep(60 * time.Second)
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				message := []byte("pong")
-				o.conn.WriteMessage(websocket.TextMessage, message)
-			}
+	ping := time.NewTicker(time.Second * 60)
+	defer ping.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ping.C:
+			message := []byte("pong")
+			o.conn.WriteMessage(websocket.TextMessage, message)
 		}
-	}()
+	}
 }
 
 func (o *StreamMarketTradesBranch) listen(ctx context.Context) {
