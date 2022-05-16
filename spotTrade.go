@@ -265,16 +265,26 @@ type SpotCurrentOpenOrdersResponse struct {
 }
 
 func (b *Client) GetCurrentSpotOrders(symbol string) ([]SpotCurrentOpenOrdersResponse, error) {
-	usymbol := strings.ToUpper(symbol)
-	opts := OnlySymbolOpt{
-		Symbol: usymbol,
-	}
-	res, err := b.do("spot", http.MethodGet, "api/v3/openOrders", opts, true, false)
-	if err != nil {
-		return nil, err
+	var output []byte
+	if symbol == "" {
+		res, err := b.do("spot", http.MethodGet, "api/v3/openOrders", nil, true, false)
+		if err != nil {
+			return nil, err
+		}
+		output = res
+	} else {
+		usymbol := strings.ToUpper(symbol)
+		opts := OnlySymbolOpt{
+			Symbol: usymbol,
+		}
+		res, err := b.do("spot", http.MethodGet, "api/v3/openOrders", opts, true, false)
+		if err != nil {
+			return nil, err
+		}
+		output = res
 	}
 	resp := &[]SpotCurrentOpenOrdersResponse{}
-	err = json.Unmarshal(res, resp)
+	err := json.Unmarshal(output, resp)
 	if err != nil {
 		return nil, err
 	}

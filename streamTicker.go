@@ -216,7 +216,7 @@ func (s *StreamTickerBranch) socketTicker(
 				log.Println(message)
 				return errors.New(message)
 			}
-			res, err1 := DecodingMap(buf, logger)
+			res, err1 := decodingMap(buf, logger)
 			if err1 != nil {
 				s.outBinanceErr()
 				message := "Binance reconnect..."
@@ -256,7 +256,7 @@ func (w *StreamTickerBranch) BinanceHandleTickerHub(product string, res *map[str
 func (w *StreamTickerBranch) handleBinanceSpotTicker(res *map[string]interface{}, mainCh *chan map[string]interface{}) error {
 	switch {
 	case (*res)["e"] == "24hrTicker":
-		Timestamp := FormatingTimeStamp((*res)["E"].(float64))
+		Timestamp := formatingTimeStamp((*res)["E"].(float64))
 		NowTime := time.Now()
 		if NowTime.After(Timestamp.Add(time.Second*2)) == true {
 			w.outBinanceErr()
@@ -272,7 +272,7 @@ func (w *StreamTickerBranch) handleBinanceSpotTicker(res *map[string]interface{}
 }
 
 func (w *StreamTickerBranch) handleBinanceSwapTicker(res *map[string]interface{}, mainCh *chan map[string]interface{}) error {
-	Timestamp := FormatingTimeStamp((*res)["E"].(float64))
+	Timestamp := formatingTimeStamp((*res)["E"].(float64))
 	NowTime := time.Now()
 	if NowTime.After(Timestamp.Add(time.Second*2)) == true {
 		w.outBinanceErr()

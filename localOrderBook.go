@@ -765,11 +765,11 @@ func (o *OrderBookBranch) maintainOrderBook(
 					for _, data := range storage {
 						switch product {
 						case "spot":
-							if err := o.SpotUpdateJudge(&data, &linked); err != nil {
+							if err := o.spotUpdateJudge(&data, &linked); err != nil {
 								return err
 							}
 						case "swap":
-							if err := o.SwapUpdateJudge(&data, &linked); err != nil {
+							if err := o.swapUpdateJudge(&data, &linked); err != nil {
 								return err
 							}
 						}
@@ -780,18 +780,18 @@ func (o *OrderBookBranch) maintainOrderBook(
 				// handle incoming data
 				switch product {
 				case "spot":
-					if err := o.SpotUpdateJudge(&message, &linked); err != nil {
+					if err := o.spotUpdateJudge(&message, &linked); err != nil {
 						return err
 					}
 				case "swap":
-					if err := o.SwapUpdateJudge(&message, &linked); err != nil {
+					if err := o.swapUpdateJudge(&message, &linked); err != nil {
 						return err
 					}
 				}
 				// update last update
 				lastUpdate = time.Now()
 			default:
-				st := FormatingTimeStamp(message["T"].(float64))
+				st := formatingTimeStamp(message["T"].(float64))
 				price, _ := decimal.NewFromString(message["p"].(string))
 				size, _ := decimal.NewFromString(message["q"].(string))
 				// is the buyer the mm
@@ -802,8 +802,8 @@ func (o *OrderBookBranch) maintainOrderBook(
 				} else {
 					side = "buy"
 				}
-				o.LocateTradeImpact(side, price, size, st)
-				o.RenewTradeImpact()
+				o.locateTradeImpact(side, price, size, st)
+				o.renewTradeImpact()
 			}
 		default:
 			if time.Now().After(lastUpdate.Add(time.Second * 10)) {
@@ -820,7 +820,7 @@ func (o *OrderBookBranch) maintainOrderBook(
 	}
 }
 
-func (o *OrderBookBranch) LocateTradeImpact(side string, price, size decimal.Decimal, st time.Time) {
+func (o *OrderBookBranch) locateTradeImpact(side string, price, size decimal.Decimal, st time.Time) {
 	switch side {
 	case "buy":
 		o.buyTrade.mux.Lock()
@@ -837,7 +837,7 @@ func (o *OrderBookBranch) LocateTradeImpact(side string, price, size decimal.Dec
 	}
 }
 
-func (o *OrderBookBranch) RenewTradeImpact() {
+func (o *OrderBookBranch) renewTradeImpact() {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	now := time.Now()
@@ -881,7 +881,7 @@ func (o *OrderBookBranch) RenewTradeImpact() {
 	wg.Wait()
 }
 
-func (o *OrderBookBranch) SpotUpdateJudge(message *map[string]interface{}, linked *bool) error {
+func (o *OrderBookBranch) spotUpdateJudge(message *map[string]interface{}, linked *bool) error {
 	headID := decimal.NewFromFloat((*message)["U"].(float64))
 	tailID := decimal.NewFromFloat((*message)["u"].(float64))
 	baseID := o.ReadLastUpdateId()
@@ -910,7 +910,7 @@ func (o *OrderBookBranch) SpotUpdateJudge(message *map[string]interface{}, linke
 	return nil
 }
 
-func (o *OrderBookBranch) SwapUpdateJudge(message *map[string]interface{}, linked *bool) error {
+func (o *OrderBookBranch) swapUpdateJudge(message *map[string]interface{}, linked *bool) error {
 	headID := decimal.NewFromFloat((*message)["U"].(float64))
 	tailID := decimal.NewFromFloat((*message)["u"].(float64))
 	puID := decimal.NewFromFloat((*message)["pu"].(float64))
@@ -938,7 +938,7 @@ func (o *OrderBookBranch) SwapUpdateJudge(message *map[string]interface{}, linke
 	return nil
 }
 
-func DecodingMap(message []byte, logger *log.Logger) (res map[string]interface{}, err error) {
+func decodingMap(message []byte, logger *log.Logger) (res map[string]interface{}, err error) {
 	if message == nil {
 		err = errors.New("the incoming message is nil")
 		return nil, err
@@ -985,7 +985,7 @@ func binanceSocket(ctx context.Context, product, symbol, channel string, logger 
 			return err
 		default:
 			if w.Conn == nil {
-				d := w.OutBinanceErr()
+				d := w.outBinanceErr()
 				*mainCh <- d
 				message := "Binance reconnect..."
 				logger.Infoln(message)
@@ -993,23 +993,23 @@ func binanceSocket(ctx context.Context, product, symbol, channel string, logger 
 			}
 			_, buf, err := conn.ReadMessage()
 			if err != nil {
-				d := w.OutBinanceErr()
+				d := w.outBinanceErr()
 				*mainCh <- d
 				message := "Binance reconnect..."
 				logger.Infoln(message)
 				return errors.New(message)
 			}
-			res, err1 := DecodingMap(buf, logger)
+			res, err1 := decodingMap(buf, logger)
 			if err1 != nil {
-				d := w.OutBinanceErr()
+				d := w.outBinanceErr()
 				*mainCh <- d
 				message := "Binance reconnect..."
 				logger.Infoln(message)
 				return errors.New(message)
 			}
-			err2 := w.HandleBinanceSocketData(res, mainCh)
+			err2 := w.handleBinanceSocketData(res, mainCh)
 			if err2 != nil {
-				d := w.OutBinanceErr()
+				d := w.outBinanceErr()
 				*mainCh <- d
 				message := "Binance reconnect..."
 				logger.Infoln(message)
@@ -1022,7 +1022,7 @@ func binanceSocket(ctx context.Context, product, symbol, channel string, logger 
 	}
 }
 
-func (w *wS) HandleBinanceSocketData(res map[string]interface{}, mainCh *chan map[string]interface{}) error {
+func (w *wS) handleBinanceSocketData(res map[string]interface{}, mainCh *chan map[string]interface{}) error {
 	event, ok := res["e"].(string)
 	if !ok {
 		return nil
@@ -1030,13 +1030,13 @@ func (w *wS) HandleBinanceSocketData(res map[string]interface{}, mainCh *chan ma
 	switch event {
 	case "depthUpdate":
 		if st, ok := res["E"].(float64); !ok {
-			m := w.OutBinanceErr()
+			m := w.outBinanceErr()
 			*mainCh <- m
 			return errors.New("got nil when updating event time")
 		} else {
-			stamp := FormatingTimeStamp(st)
+			stamp := formatingTimeStamp(st)
 			if time.Now().After(stamp.Add(time.Second * 5)) {
-				m := w.OutBinanceErr()
+				m := w.outBinanceErr()
 				*mainCh <- m
 				return errors.New("websocket data delay more than 5 sec")
 			}
@@ -1046,7 +1046,7 @@ func (w *wS) HandleBinanceSocketData(res map[string]interface{}, mainCh *chan ma
 		headID := decimal.NewFromFloat(firstId)
 		tailID := decimal.NewFromFloat(lastId)
 		if headID.LessThan(w.LastUpdatedId) {
-			m := w.OutBinanceErr()
+			m := w.outBinanceErr()
 			*mainCh <- m
 			return errors.New("got error when updating lastUpdateId")
 		}
@@ -1060,13 +1060,13 @@ func (w *wS) HandleBinanceSocketData(res map[string]interface{}, mainCh *chan ma
 	return nil
 }
 
-func (w *wS) OutBinanceErr() map[string]interface{} {
+func (w *wS) outBinanceErr() map[string]interface{} {
 	w.OnErr = true
 	m := make(map[string]interface{})
 	return m
 }
 
-func FormatingTimeStamp(timeFloat float64) time.Time {
+func formatingTimeStamp(timeFloat float64) time.Time {
 	t := time.Unix(int64(timeFloat/1000), 0)
 	return t
 }

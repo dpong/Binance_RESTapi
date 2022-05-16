@@ -23,6 +23,8 @@ type Client struct {
 	subaccount  string
 	client      *http.Client
 	window      int
+	// addition
+	spotUser *SpotUserDataBranch
 }
 
 func New(key, secret, subaccount string) *Client {
