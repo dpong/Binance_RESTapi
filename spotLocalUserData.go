@@ -32,6 +32,7 @@ type TradeData struct {
 	Side      string
 	Oid       string
 	IsMaker   bool
+	OrderType string
 	Price     decimal.Decimal
 	Qty       decimal.Decimal
 	Fee       decimal.Decimal
@@ -54,10 +55,13 @@ func (u *SpotUserDataBranch) AccountData() (*SpotAccountResponse, error) {
 }
 
 func (u *SpotUserDataBranch) ReadTrade() (TradeData, error) {
+	if len(u.trades) == 0 {
+		return TradeData{}, errors.New("trade channel is empty")
+	}
 	if data, ok := <-u.trades; ok {
 		return data, nil
 	}
-	return TradeData{}, errors.New("trade channel is empty.")
+	return TradeData{}, errors.New("trade channel is closed.")
 }
 
 func (c *Client) InitSpotUserData(logger *log.Logger) {
@@ -353,7 +357,7 @@ func handleUserData(res *map[string]interface{}, mainCh *chan map[string]interfa
 func (u *SpotUserDataBranch) initialChannels() {
 	// 5 err is allowed
 	u.errs = make(chan error, 5)
-	u.trades = make(chan TradeData, 100)
+	u.trades = make(chan TradeData, 200)
 }
 
 func (u *SpotUserDataBranch) insertErr(input error) {
@@ -427,6 +431,9 @@ func (u *SpotUserDataBranch) handleTrade(res *map[string]interface{}) {
 	if st, ok := (*res)["T"].(float64); ok {
 		stamp := formatingTimeStamp(st)
 		data.TimeStamp = stamp
+	}
+	if orderType, ok := (*res)["o"].(string); ok {
+		data.OrderType = orderType
 	}
 	u.insertTrade(&data)
 }
