@@ -9,19 +9,22 @@ func (b *Client) SpotPlaceOrder(symbol, side string, price, size string, orderTy
 	usymbol := strings.ToUpper(symbol)
 	uside := strings.ToUpper(side)
 	utype := strings.ToUpper(orderType)
-	var utif string
-	if timeInforce == "" {
-		utif = "GTC"
-	} else {
-		utif = strings.ToUpper(timeInforce)
-	}
 	opts := PlaceOrderOpts{
-		Symbol:      usymbol,
-		Side:        uside,
-		Price:       price,
-		Qty:         size,
-		Type:        utype,
-		TimeInForce: utif,
+		Symbol: usymbol,
+		Side:   uside,
+		Price:  price,
+		Qty:    size,
+		Type:   utype,
+	}
+	if timeInforce == "" {
+		switch orderType {
+		case "LIMIT_MAKER":
+			//
+		default:
+			opts.TimeInForce = "GTC"
+		}
+	} else {
+		opts.TimeInForce = strings.ToUpper(timeInforce)
 	}
 	res, err := b.do("spot", http.MethodPost, "api/v3/order", opts, true, false)
 	if err != nil {
@@ -60,7 +63,7 @@ type PlaceOrderOpts struct {
 	Symbol      string `url:"symbol"`
 	Price       string `url:"price"`
 	Qty         string `url:"quantity"`
-	TimeInForce string `url:"timeInForce"`
+	TimeInForce string `url:"timeInForce,omitempty"`
 	Type        string `url:"type"`
 	Side        string `url:"side"`
 }
