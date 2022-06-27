@@ -39,8 +39,8 @@ type TradeData struct {
 	TimeStamp time.Time
 }
 
-func (u *SpotUserDataBranch) Close() {
-	(*u.cancel)()
+func (u *Client) CloseSpotUserData() {
+	(*u.spotUser.cancel)()
 }
 
 // default is 60 sec
