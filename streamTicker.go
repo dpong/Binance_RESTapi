@@ -24,18 +24,55 @@ type StreamTickerBranch struct {
 }
 
 type tobBranch struct {
-	mux   sync.RWMutex
-	price string
-	qty   string
+	mux       sync.RWMutex
+	price     string
+	qty       string
+	timestamp time.Time
 }
 
-func SwapStreamTicker(symbol string, logger *log.Logger) *StreamTickerBranch {
-	return localStreamTicker("swap", symbol, logger)
+func PerpStreamTicker(symbol string, logger *log.Logger) *StreamTickerBranch {
+	return localStreamTicker("perp", symbol, logger)
 }
 
 func SpotStreamTicker(symbol string, logger *log.Logger) *StreamTickerBranch {
 	return localStreamTicker("spot", symbol, logger)
 }
+
+func (s *StreamTickerBranch) Close() {
+	(*s.cancel)()
+	s.bid.mux.Lock()
+	s.bid.price = NullPrice
+	s.bid.mux.Unlock()
+	s.ask.mux.Lock()
+	s.ask.price = NullPrice
+	s.ask.mux.Unlock()
+}
+
+func (s *StreamTickerBranch) GetBid() (price, qty string, ts time.Time, ok bool) {
+	s.bid.mux.RLock()
+	defer s.bid.mux.RUnlock()
+	price = s.bid.price
+	qty = s.bid.qty
+	ts = s.bid.timestamp
+	if price == NullPrice || price == "" {
+		return price, qty, ts, false
+	}
+	return price, qty, ts, true
+}
+
+func (s *StreamTickerBranch) GetAsk() (price, qty string, ts time.Time, ok bool) {
+	s.ask.mux.RLock()
+	defer s.ask.mux.RUnlock()
+	price = s.ask.price
+	qty = s.ask.qty
+	ts = s.bid.timestamp
+	if price == NullPrice || price == "" {
+		return price, qty, ts, false
+	}
+	return price, qty, ts, true
+}
+
+// internal
 
 func localStreamTicker(product, symbol string, logger *log.Logger) *StreamTickerBranch {
 	var s StreamTickerBranch
@@ -74,50 +111,20 @@ func localStreamTicker(product, symbol string, logger *log.Logger) *StreamTicker
 	return &s
 }
 
-func (s *StreamTickerBranch) Close() {
-	(*s.cancel)()
-	s.bid.mux.Lock()
-	s.bid.price = NullPrice
-	s.bid.mux.Unlock()
-	s.ask.mux.Lock()
-	s.ask.price = NullPrice
-	s.ask.mux.Unlock()
-}
-
-func (s *StreamTickerBranch) GetBid() (price, qty string, ok bool) {
-	s.bid.mux.RLock()
-	defer s.bid.mux.RUnlock()
-	price = s.bid.price
-	qty = s.bid.qty
-	if price == NullPrice || price == "" {
-		return price, qty, false
-	}
-	return price, qty, true
-}
-
-func (s *StreamTickerBranch) GetAsk() (price, qty string, ok bool) {
-	s.ask.mux.RLock()
-	defer s.ask.mux.RUnlock()
-	price = s.ask.price
-	qty = s.ask.qty
-	if price == NullPrice || price == "" {
-		return price, qty, false
-	}
-	return price, qty, true
-}
-
-func (s *StreamTickerBranch) updateBidData(price, qty string) {
+func (s *StreamTickerBranch) updateBidData(price, qty string, ts time.Time) {
 	s.bid.mux.Lock()
 	defer s.bid.mux.Unlock()
 	s.bid.price = price
 	s.bid.qty = qty
+	s.bid.timestamp = ts
 }
 
-func (s *StreamTickerBranch) updateAskData(price, qty string) {
+func (s *StreamTickerBranch) updateAskData(price, qty string, ts time.Time) {
 	s.ask.mux.Lock()
 	defer s.ask.mux.Unlock()
 	s.ask.price = price
 	s.ask.qty = qty
+	s.ask.timestamp = ts
 }
 
 func (s *StreamTickerBranch) maintainStreamTicker(
@@ -149,8 +156,12 @@ func (s *StreamTickerBranch) maintainStreamTicker(
 			if askqty, ok := message["A"].(string); ok {
 				askQty = askqty
 			}
-			s.updateBidData(bidPrice, bidQty)
-			s.updateAskData(askPrice, askQty)
+			var ts time.Time
+			if eventTime, ok := message["E"].(float64); ok {
+				ts = time.UnixMilli(int64(eventTime))
+			}
+			s.updateBidData(bidPrice, bidQty, ts)
+			s.updateAskData(askPrice, askQty, ts)
 			lastUpdate = time.Now()
 		default:
 			if time.Now().After(lastUpdate.Add(time.Second * 10)) {
@@ -176,7 +187,7 @@ func (s *StreamTickerBranch) socketTicker(
 	s.socket.OnErr = false
 	var buffer bytes.Buffer
 	switch product {
-	case "swap":
+	case "perp":
 		buffer.WriteString("wss://fstream3.binance.com/ws/")
 		buffer.WriteString(strings.ToLower(symbol))
 		buffer.WriteString("@bookTicker")
@@ -223,7 +234,7 @@ func (s *StreamTickerBranch) socketTicker(
 				log.Printf(message, err1)
 				return err1
 			}
-			err2 := s.BinanceHandleTickerHub(product, &res, mainCh)
+			err2 := s.binanceHandleTickerHub(product, &res, mainCh)
 			if err2 != nil {
 				s.outBinanceErr()
 				message := "Binance reconnect..."
@@ -244,9 +255,9 @@ func (s *StreamTickerBranch) outBinanceErr() map[string]interface{} {
 	return m
 }
 
-func (w *StreamTickerBranch) BinanceHandleTickerHub(product string, res *map[string]interface{}, mainCh *chan map[string]interface{}) error {
-	if product == "swap" {
-		err := w.handleBinanceSwapTicker(res, mainCh)
+func (w *StreamTickerBranch) binanceHandleTickerHub(product string, res *map[string]interface{}, mainCh *chan map[string]interface{}) error {
+	if product == "perp" {
+		err := w.handleBinancePerpTicker(res, mainCh)
 		return err
 	}
 	err := w.handleBinanceSpotTicker(res, mainCh)
@@ -271,7 +282,7 @@ func (w *StreamTickerBranch) handleBinanceSpotTicker(res *map[string]interface{}
 	return errors.New("unsupport channel error")
 }
 
-func (w *StreamTickerBranch) handleBinanceSwapTicker(res *map[string]interface{}, mainCh *chan map[string]interface{}) error {
+func (w *StreamTickerBranch) handleBinancePerpTicker(res *map[string]interface{}, mainCh *chan map[string]interface{}) error {
 	Timestamp := formatingTimeStamp((*res)["E"].(float64))
 	NowTime := time.Now()
 	if NowTime.After(Timestamp.Add(time.Second*2)) == true {

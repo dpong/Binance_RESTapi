@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-type PlaceOrderOptsSwap struct {
+type PlaceOrderOptsPerp struct {
 	Symbol      string `url:"symbol"`
 	Price       string `url:"price"`
 	Qty         string `url:"quantity"`
@@ -15,7 +15,7 @@ type PlaceOrderOptsSwap struct {
 	ReduceOnly  string `url:"reduceOnly"`
 }
 
-type PlaceOrderOptsSwapMarket struct {
+type PlaceOrderOptsPerpMarket struct {
 	Symbol     string `url:"symbol"`
 	Qty        string `url:"quantity"`
 	Type       string `url:"type"`
@@ -24,10 +24,10 @@ type PlaceOrderOptsSwapMarket struct {
 	ClientID   string `url:"newClientOrderId, omitempty"`
 }
 
-func (b *Client) SwapPlaceOrderMarket(symbol, side string, size string, reduceOnly, clientID string) (*FutureOrderResponse, error) {
+func (b *Client) PerpPlaceOrderMarket(symbol, side string, size string, reduceOnly, clientID string) (*PerpOrderResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	uside := strings.ToUpper(side)
-	opts := PlaceOrderOptsSwapMarket{
+	opts := PlaceOrderOptsPerpMarket{
 		Symbol:     usymbol,
 		Side:       uside,
 		Qty:        size,
@@ -41,7 +41,7 @@ func (b *Client) SwapPlaceOrderMarket(symbol, side string, size string, reduceOn
 	if err != nil {
 		return nil, err
 	}
-	resp := &FutureOrderResponse{}
+	resp := &PerpOrderResponse{}
 	err = json.Unmarshal(res, resp)
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func (b *Client) SwapPlaceOrderMarket(symbol, side string, size string, reduceOn
 	return resp, nil
 }
 
-func (b *Client) SwapPlaceOrder(symbol, side string, price, size string, orderType, timeInforce, reduceOnly string) (*FutureOrderResponse, error) {
+func (b *Client) PerpPlaceOrder(symbol, side string, price, size string, orderType, timeInforce, reduceOnly string) (*PerpOrderResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	uside := strings.ToUpper(side)
 	utype := strings.ToUpper(orderType)
@@ -59,7 +59,7 @@ func (b *Client) SwapPlaceOrder(symbol, side string, price, size string, orderTy
 	} else {
 		utif = strings.ToUpper(timeInforce)
 	}
-	opts := PlaceOrderOptsSwap{
+	opts := PlaceOrderOptsPerp{
 		Symbol:      usymbol,
 		Side:        uside,
 		Price:       price,
@@ -72,7 +72,7 @@ func (b *Client) SwapPlaceOrder(symbol, side string, price, size string, orderTy
 	if err != nil {
 		return nil, err
 	}
-	resp := &FutureOrderResponse{}
+	resp := &PerpOrderResponse{}
 	err = json.Unmarshal(res, resp)
 	if err != nil {
 		return nil, err
@@ -80,12 +80,12 @@ func (b *Client) SwapPlaceOrder(symbol, side string, price, size string, orderTy
 	return resp, nil
 }
 
-type PlaceBatchOrdersOptsSwap struct {
+type PlaceBatchOrdersOptsPerp struct {
 	OrderList string `url:"batchOrders"`
 }
 
 // max 5 orders per request
-func (b *Client) SwapPlaceBatchOrders(orders []PlaceOrderOptsSwap) (*FutureBatchOrdersResponse, error) {
+func (b *Client) PerpPlaceBatchOrders(orders []PlaceOrderOptsPerp) (*PerpBatchOrdersResponse, error) {
 	opts := []map[string]interface{}{}
 	for _, order := range orders {
 		m := map[string]interface{}{}
@@ -102,13 +102,13 @@ func (b *Client) SwapPlaceBatchOrders(orders []PlaceOrderOptsSwap) (*FutureBatch
 	if err != nil {
 		return nil, err
 	}
-	input := PlaceBatchOrdersOptsSwap{}
+	input := PlaceBatchOrdersOptsPerp{}
 	input.OrderList = Bytes2String(out)
 	res, err := b.do("future", http.MethodPost, "fapi/v1/batchOrders", input, true, false)
 	if err != nil {
 		return nil, err
 	}
-	resp := FutureBatchOrdersResponse{}
+	resp := PerpBatchOrdersResponse{}
 	err = json.Unmarshal(res, &resp)
 	if err != nil {
 		return nil, err
@@ -116,7 +116,7 @@ func (b *Client) SwapPlaceBatchOrders(orders []PlaceOrderOptsSwap) (*FutureBatch
 	return &resp, nil
 }
 
-type FutureOrderResponse struct {
+type PerpOrderResponse struct {
 	ClientOrderID string `json:"clientOrderId"`
 	CumQty        string `json:"cumQty"`
 	CumQuote      string `json:"cumQuote"`
@@ -141,7 +141,7 @@ type FutureOrderResponse struct {
 	WorkingType   string `json:"workingType"`
 }
 
-type FutureBatchOrdersResponse []struct {
+type PerpBatchOrdersResponse []struct {
 	Clientorderid string `json:"clientOrderId,omitempty"`
 	Cumqty        string `json:"cumQty,omitempty"`
 	Cumquote      string `json:"cumQuote,omitempty"`
@@ -168,7 +168,7 @@ type FutureBatchOrdersResponse []struct {
 	Msg           string `json:"msg,omitempty"`
 }
 
-func (b *Client) SwapCancelOrder(symbol string, oid int) (*FutureOrderResponse, error) {
+func (b *Client) PerpCancelOrder(symbol string, oid int) (*PerpOrderResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	opts := OIDOpts{
 		Symbol: usymbol,
@@ -178,7 +178,7 @@ func (b *Client) SwapCancelOrder(symbol string, oid int) (*FutureOrderResponse, 
 	if err != nil {
 		return nil, err
 	}
-	resp := &FutureOrderResponse{}
+	resp := &PerpOrderResponse{}
 	err = json.Unmarshal(res, resp)
 	if err != nil {
 		return nil, err
@@ -192,7 +192,7 @@ type OIDListOpts struct {
 }
 
 // max 10 order per request
-func (b *Client) SwapCancelBatchOrders(symbol string, oids []int) (*FutureBatchOrdersResponse, error) {
+func (b *Client) PerpCancelBatchOrders(symbol string, oids []int) (*PerpBatchOrdersResponse, error) {
 	out, err := json.Marshal(oids)
 	if err != nil {
 		return nil, err
@@ -205,7 +205,7 @@ func (b *Client) SwapCancelBatchOrders(symbol string, oids []int) (*FutureBatchO
 	if err != nil {
 		return nil, err
 	}
-	resp := FutureBatchOrdersResponse{}
+	resp := PerpBatchOrdersResponse{}
 	err = json.Unmarshal(res, &resp)
 	if err != nil {
 		return nil, err
@@ -213,7 +213,7 @@ func (b *Client) SwapCancelBatchOrders(symbol string, oids []int) (*FutureBatchO
 	return &resp, nil
 }
 
-func (b *Client) SwapOpenOrder(symbol string, oid int) (*FutureOrderResponse, error) {
+func (b *Client) PerpOpenOrder(symbol string, oid int) (*PerpOrderResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	opts := OIDOpts{
 		Symbol: usymbol,
@@ -223,7 +223,7 @@ func (b *Client) SwapOpenOrder(symbol string, oid int) (*FutureOrderResponse, er
 	if err != nil {
 		return nil, err
 	}
-	resp := &FutureOrderResponse{}
+	resp := &PerpOrderResponse{}
 	err = json.Unmarshal(res, resp)
 	if err != nil {
 		return nil, err
@@ -231,7 +231,7 @@ func (b *Client) SwapOpenOrder(symbol string, oid int) (*FutureOrderResponse, er
 	return resp, nil
 }
 
-type FutureQueryOrderResonse struct {
+type PerpQueryOrderResonse struct {
 	AvgPrice      string `json:"avgPrice"`
 	ClientOrderID string `json:"clientOrderId"`
 	CumQuote      string `json:"cumQuote"`
@@ -257,7 +257,7 @@ type FutureQueryOrderResonse struct {
 	PriceProtect  bool   `json:"priceProtect"`
 }
 
-func (b *Client) SwapQueryOrder(symbol string, oid int) (*FutureQueryOrderResonse, error) {
+func (b *Client) PerpQueryOrder(symbol string, oid int) (*PerpQueryOrderResonse, error) {
 	usymbol := strings.ToUpper(symbol)
 	opts := OIDOpts{
 		Symbol: usymbol,
@@ -267,7 +267,7 @@ func (b *Client) SwapQueryOrder(symbol string, oid int) (*FutureQueryOrderResons
 	if err != nil {
 		return nil, err
 	}
-	resp := &FutureQueryOrderResonse{}
+	resp := &PerpQueryOrderResonse{}
 	err = json.Unmarshal(res, resp)
 	if err != nil {
 		return nil, err
@@ -275,7 +275,7 @@ func (b *Client) SwapQueryOrder(symbol string, oid int) (*FutureQueryOrderResons
 	return resp, nil
 }
 
-type SwapCurrentOpenOrdersResponse struct {
+type PerpCurrentOpenOrdersResponse struct {
 	Avgprice      string `json:"avgPrice"`
 	Clientorderid string `json:"clientOrderId"`
 	Cumquote      string `json:"cumQuote"`
@@ -301,7 +301,7 @@ type SwapCurrentOpenOrdersResponse struct {
 	Priceprotect  bool   `json:"priceProtect"`
 }
 
-func (b *Client) GetCurrentSwapOrders(symbol string) ([]SwapCurrentOpenOrdersResponse, error) {
+func (b *Client) GetCurrentSwapOrders(symbol string) ([]PerpCurrentOpenOrdersResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	opts := OnlySymbolOpt{
 		Symbol: usymbol,
@@ -310,7 +310,7 @@ func (b *Client) GetCurrentSwapOrders(symbol string) ([]SwapCurrentOpenOrdersRes
 	if err != nil {
 		return nil, err
 	}
-	resp := &[]SwapCurrentOpenOrdersResponse{}
+	resp := &[]PerpCurrentOpenOrdersResponse{}
 	err = json.Unmarshal(res, resp)
 	if err != nil {
 		return nil, err
@@ -318,12 +318,12 @@ func (b *Client) GetCurrentSwapOrders(symbol string) ([]SwapCurrentOpenOrdersRes
 	return *resp, nil
 }
 
-type CancelAllSwaoOrdersResponse struct {
+type CancelAllPerpOrdersResponse struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
 }
 
-func (b *Client) CancelAllSwapOrders(symbol string) (*CancelAllSwaoOrdersResponse, error) {
+func (b *Client) CancelAllSwapOrders(symbol string) (*CancelAllPerpOrdersResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	opts := OnlySymbolOpt{
 		Symbol: usymbol,
@@ -332,7 +332,7 @@ func (b *Client) CancelAllSwapOrders(symbol string) (*CancelAllSwaoOrdersRespons
 	if err != nil {
 		return nil, err
 	}
-	resp := &CancelAllSwaoOrdersResponse{}
+	resp := &CancelAllPerpOrdersResponse{}
 	err = json.Unmarshal(res, resp)
 	if err != nil {
 		return nil, err

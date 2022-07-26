@@ -8,22 +8,32 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 
 	"github.com/gorilla/websocket"
 )
 
 type StreamMarketTradesBranch struct {
-	cancel *context.CancelFunc
-	conn   *websocket.Conn
-	market string
-
-	tradeChan    chan BnnTradeData
+	cancel       *context.CancelFunc
+	conn         *websocket.Conn
+	market       string
+	product      string
+	tradeChan    chan PublicTradeData
 	tradesBranch struct {
-		Trades []BnnTradeData
+		Trades []PublicTradeData
 		sync.Mutex
 	}
 	logger *logrus.Logger
+}
+
+type PublicTradeData struct {
+	Product string
+	Symbol  string
+	Side    string
+	Price   decimal.Decimal
+	Qty     decimal.Decimal
+	Time    time.Time
 }
 
 type BnnTradeData struct {
@@ -40,9 +50,9 @@ type BnnTradeData struct {
 	M         bool   `json:"M"`
 }
 
-func SwapTradeStream(symbol string, logger *logrus.Logger) *StreamMarketTradesBranch {
+func PerpTradeStream(symbol string, logger *logrus.Logger) *StreamMarketTradesBranch {
 	Usymbol := strings.ToUpper(symbol)
-	return tradeStream(Usymbol, logger, "swap")
+	return tradeStream(Usymbol, logger, "perp")
 }
 
 func SpotTradeStream(symbol string, logger *logrus.Logger) *StreamMarketTradesBranch {
@@ -50,11 +60,11 @@ func SpotTradeStream(symbol string, logger *logrus.Logger) *StreamMarketTradesBr
 	return tradeStream(Usymbol, logger, "spot")
 }
 
-func (o *StreamMarketTradesBranch) GetTrades() []BnnTradeData {
+func (o *StreamMarketTradesBranch) GetTrades() []PublicTradeData {
 	o.tradesBranch.Lock()
 	defer o.tradesBranch.Unlock()
 	trades := o.tradesBranch.Trades
-	o.tradesBranch.Trades = []BnnTradeData{}
+	o.tradesBranch.Trades = []PublicTradeData{}
 	return trades
 }
 
@@ -62,7 +72,7 @@ func (o *StreamMarketTradesBranch) Close() {
 	(*o.cancel)()
 	o.tradesBranch.Lock()
 	defer o.tradesBranch.Unlock()
-	o.tradesBranch.Trades = []BnnTradeData{}
+	o.tradesBranch.Trades = []PublicTradeData{}
 }
 
 func tradeStream(symbol string, logger *logrus.Logger, product string) *StreamMarketTradesBranch {
@@ -70,8 +80,9 @@ func tradeStream(symbol string, logger *logrus.Logger, product string) *StreamMa
 	ctx, cancel := context.WithCancel(context.Background())
 	o.cancel = &cancel
 	o.market = symbol
-	o.tradeChan = make(chan BnnTradeData, 100)
+	o.tradeChan = make(chan PublicTradeData, 100)
 	o.logger = logger
+	o.product = product
 	go o.maintainSession(ctx, product, symbol)
 	go o.listen(ctx)
 	return o
@@ -90,7 +101,7 @@ func (o *StreamMarketTradesBranch) listen(ctx context.Context) {
 	}
 }
 
-func (o *StreamMarketTradesBranch) appendNewTrade(new *BnnTradeData) {
+func (o *StreamMarketTradesBranch) appendNewTrade(new *PublicTradeData) {
 	o.tradesBranch.Lock()
 	defer o.tradesBranch.Unlock()
 	o.tradesBranch.Trades = append(o.tradesBranch.Trades, *new)
@@ -117,7 +128,7 @@ func (o *StreamMarketTradesBranch) maintain(ctx context.Context, product string,
 	switch product {
 	case "spot":
 		buffer.WriteString("wss://stream.binance.com:9443/ws/")
-	case "swap":
+	case "perp":
 		buffer.WriteString("wss://fstream.binance.com/ws/")
 	}
 	buffer.WriteString(strings.ToLower(symbol))
@@ -126,6 +137,7 @@ func (o *StreamMarketTradesBranch) maintain(ctx context.Context, product string,
 	if err != nil {
 		return err
 	}
+	o.logger.Infof("Binance %s %s market trade stream connected.\n", symbol, product)
 	o.conn = conn
 	defer o.conn.Close()
 	if err := o.conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
@@ -162,7 +174,25 @@ func (o *StreamMarketTradesBranch) handleBnnTradeSocketMsg(msg []byte) error {
 	case "subscribed":
 		//fmt.Println("websocket subscribed")
 	case "trade":
-		o.tradeChan <- data
+		var side string
+		if data.Maker {
+			// buyer maker
+			side = "sell"
+		} else {
+			side = "buy"
+		}
+
+		price, _ := decimal.NewFromString(data.Price)
+		qty, _ := decimal.NewFromString(data.Qty)
+		pubData := PublicTradeData{
+			Product: o.product,
+			Symbol:  data.Symbol,
+			Side:    side,
+			Price:   price,
+			Qty:     qty,
+			Time:    time.UnixMilli(int64(data.Timestamp)),
+		}
+		o.tradeChan <- pubData
 	default:
 		// pass
 	}

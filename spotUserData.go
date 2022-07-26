@@ -14,12 +14,17 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type SpotUserDataBranch struct {
+type spotUserDataBranch struct {
 	account            spotAccountBranch
 	cancel             *context.CancelFunc
 	httpUpdateInterval int
 	errs               chan error
-	trades             chan TradeData
+	trades             userTradesBranch
+}
+
+type userTradesBranch struct {
+	sync.RWMutex
+	data []TradeData
 }
 
 type spotAccountBranch struct {
@@ -36,6 +41,7 @@ type TradeData struct {
 	Price     decimal.Decimal
 	Qty       decimal.Decimal
 	Fee       decimal.Decimal
+	FeeAsset  string
 	TimeStamp time.Time
 }
 
@@ -44,37 +50,29 @@ func (u *Client) CloseSpotUserData() {
 }
 
 // default is 60 sec
-func (u *SpotUserDataBranch) SetHttpUpdateInterval(input int) {
-	u.httpUpdateInterval = input
+func (c *Client) SetSpotHttpUpdateInterval(input int) {
+	c.spotUser.httpUpdateInterval = input
 }
 
-func (u *SpotUserDataBranch) AccountData() (*SpotAccountResponse, error) {
-	u.account.RLock()
-	defer u.account.RUnlock()
-	return u.account.Data, u.readerrs()
+func (c *Client) GetSpotAccountData() (*SpotAccountResponse, error) {
+	c.spotUser.account.RLock()
+	defer c.spotUser.account.RUnlock()
+	return c.spotUser.account.Data, c.spotUser.readerrs()
 }
 
-func (u *SpotUserDataBranch) ReadTrade() (TradeData, error) {
-	if len(u.trades) == 0 {
-		return TradeData{}, errors.New("trade channel is empty")
-	}
-	if data, ok := <-u.trades; ok {
-		return data, nil
-	}
-	return TradeData{}, errors.New("trade channel is closed.")
+func (c *Client) ReadSpotUserTrade() []TradeData {
+	c.spotUser.trades.Lock()
+	defer c.spotUser.trades.Unlock()
+	trades := c.spotUser.trades.data
+	c.spotUser.trades.data = []TradeData{}
+	return trades
 }
 
-func (c *Client) InitSpotUserData(logger *log.Logger) {
+func (c *Client) InitSpotPrivateChannel(logger *log.Logger) {
 	c.spotLocalUserData(logger)
 }
 
-func (u *SpotUserDataBranch) SpotAccount() *SpotAccountResponse {
-	u.account.RLock()
-	defer u.account.RUnlock()
-	return u.account.Data
-}
-
-// spot, swap, isomargin, margin
+// spot, perp, isomargin, margin
 func (c *Client) GetListenKeyHub(product, symbol string) (*ListenKeyResponse, error) {
 	switch product {
 	case "spot":
@@ -95,8 +93,8 @@ func (c *Client) GetListenKeyHub(product, symbol string) (*ListenKeyResponse, er
 			return nil, err
 		}
 		return res, nil
-	case "swap":
-		res, err := c.GetSwapListenKey()
+	case "perp":
+		res, err := c.GetPerpListenKey()
 		if err != nil {
 			return nil, err
 		}
@@ -105,7 +103,7 @@ func (c *Client) GetListenKeyHub(product, symbol string) (*ListenKeyResponse, er
 	return nil, errors.New("unsupported product")
 }
 
-// spot, swap, isomargin, margin
+// spot, perp, isomargin, margin
 func (c *Client) PutListenKeyHub(product, listenKey string) error {
 	switch product {
 	case "spot":
@@ -126,8 +124,8 @@ func (c *Client) PutListenKeyHub(product, listenKey string) error {
 			return err
 		}
 		return nil
-	case "swap":
-		err := c.PutSwapListenKey(listenKey)
+	case "perp":
+		err := c.PutPerpListenKey(listenKey)
 		if err != nil {
 			return err
 		}
@@ -140,7 +138,7 @@ func (c *Client) PutListenKeyHub(product, listenKey string) error {
 
 // default errs cap 5, trades cap 100
 func (c *Client) spotLocalUserData(logger *log.Logger) {
-	var u SpotUserDataBranch
+	var u spotUserDataBranch
 	ctx, cancel := context.WithCancel(context.Background())
 	u.cancel = &cancel
 	u.httpUpdateInterval = 60
@@ -155,7 +153,7 @@ func (c *Client) spotLocalUserData(logger *log.Logger) {
 			default:
 				res, err := c.GetListenKeyHub("spot", "") // delete listen key
 				if err != nil {
-					log.Println("retry listen key for user data stream in 5 sec..")
+					logger.Println("retry listen key for user data stream in 5 sec..")
 					time.Sleep(time.Second * 5)
 					continue
 				}
@@ -175,17 +173,17 @@ func (c *Client) spotLocalUserData(logger *log.Logger) {
 				if err := u.maintainUserData(ctx, c, &userData); err == nil {
 					return
 				} else {
-					logger.Warningf("Refreshing apx local user data with err: %s.\n", err.Error())
+					logger.Warningf("Refreshing private channel with err: %s.\n", err.Error())
 				}
 			}
 		}
 	}()
 	// wait for connecting
-	time.Sleep(time.Second * 5)
 	c.spotUser = &u
+	time.Sleep(time.Second * 5)
 }
 
-func (u *SpotUserDataBranch) getAccountSnapShot(client *Client) error {
+func (u *spotUserDataBranch) getAccountSnapShot(client *Client) error {
 	u.account.Lock()
 	defer u.account.Unlock()
 	res, err := client.SpotAccount()
@@ -196,7 +194,7 @@ func (u *SpotUserDataBranch) getAccountSnapShot(client *Client) error {
 	return nil
 }
 
-func (u *SpotUserDataBranch) maintainUserData(
+func (u *spotUserDataBranch) maintainUserData(
 	ctx context.Context,
 	client *Client,
 	userData *chan map[string]interface{},
@@ -217,8 +215,6 @@ func (u *SpotUserDataBranch) maintainUserData(
 				if err := u.getAccountSnapShot(client); err != nil {
 					u.insertErr(err)
 				}
-			default:
-				time.Sleep(time.Second)
 			}
 		}
 	}()
@@ -226,7 +222,6 @@ func (u *SpotUserDataBranch) maintainUserData(
 		select {
 		case <-ctx.Done():
 			close(u.errs)
-			close(u.trades)
 			return nil
 		default:
 			message := <-(*userData)
@@ -250,8 +245,6 @@ func (u *SpotUserDataBranch) maintainUserData(
 						// order update in the future
 					}
 				}
-			default:
-				// pass
 			}
 		}
 	}
@@ -293,8 +286,6 @@ func (c *Client) spotUserData(ctx context.Context, listenKey string, logger *log
 					w.Conn.SetReadDeadline(time.Now().Add(time.Second))
 				}
 				w.Conn.SetReadDeadline(time.Now().Add(time.Second * duration))
-			default:
-				time.Sleep(time.Second)
 			}
 		}
 	}()
@@ -304,46 +295,38 @@ func (c *Client) spotUserData(ctx context.Context, listenKey string, logger *log
 		select {
 		case <-ctx.Done():
 			w.outBinanceErr()
-			message := "Apx User Data closed..."
-			log.Println(message)
+			message := "Binance spot private channel closed..."
 			return errors.New(message)
 		case <-read.C:
 			if w.Conn == nil {
 				w.outBinanceErr()
-				message := "Apx User Data reconnect..."
-				log.Println(message)
+				message := "Binance spot private channel reconnect..."
 				innerErr <- errors.New("restart")
 				return errors.New(message)
 			}
 			_, buf, err := w.Conn.ReadMessage()
 			if err != nil {
 				w.outBinanceErr()
-				message := "Apx User Data reconnect..."
-				log.Println(message)
 				innerErr <- errors.New("restart")
-				return errors.New(message)
+				return err
 			}
 			res, err1 := decodingMap(buf, logger)
 			if err1 != nil {
 				w.outBinanceErr()
-				message := "Apx User Data reconnect..."
-				log.Println(message, err1)
 				innerErr <- errors.New("restart")
 				return err1
 			}
 			// check event time first
-			handleUserData(&res, mainCh)
+			c.spotUser.handleUserData(&res, mainCh)
 			if err := w.Conn.SetReadDeadline(time.Now().Add(time.Second * duration)); err != nil {
 				innerErr <- errors.New("restart")
 				return err
 			}
-		default:
-			time.Sleep(time.Millisecond * 50)
 		}
 	}
 }
 
-func handleUserData(res *map[string]interface{}, mainCh *chan map[string]interface{}) {
+func (u *spotUserDataBranch) handleUserData(res *map[string]interface{}, mainCh *chan map[string]interface{}) {
 	if eventTimeUnix, ok := (*res)["E"].(float64); ok {
 		eventTime := formatingTimeStamp(eventTimeUnix)
 		if time.Now().After(eventTime.Add(time.Minute * 60)) {
@@ -354,27 +337,25 @@ func handleUserData(res *map[string]interface{}, mainCh *chan map[string]interfa
 	}
 }
 
-func (u *SpotUserDataBranch) initialChannels() {
+func (u *spotUserDataBranch) initialChannels() {
 	// 5 err is allowed
 	u.errs = make(chan error, 5)
-	u.trades = make(chan TradeData, 200)
 }
 
-func (u *SpotUserDataBranch) insertErr(input error) {
+func (u *spotUserDataBranch) insertErr(input error) {
 	if len(u.errs) == cap(u.errs) {
 		<-u.errs
 	}
 	u.errs <- input
 }
 
-func (u *SpotUserDataBranch) insertTrade(input *TradeData) {
-	if len(u.trades) == cap(u.trades) {
-		<-u.trades
-	}
-	u.trades <- *input
+func (u *spotUserDataBranch) insertTrade(input *TradeData) {
+	u.trades.Lock()
+	defer u.trades.Unlock()
+	u.trades.data = append(u.trades.data, *input)
 }
 
-func (u *SpotUserDataBranch) readerrs() error {
+func (u *spotUserDataBranch) readerrs() error {
 	var buffer bytes.Buffer
 	for {
 		select {
@@ -395,7 +376,7 @@ func (u *SpotUserDataBranch) readerrs() error {
 }
 
 // default fee asset is USDT
-func (u *SpotUserDataBranch) handleTrade(res *map[string]interface{}) {
+func (u *spotUserDataBranch) handleTrade(res *map[string]interface{}) {
 	data := TradeData{}
 	if symbol, ok := (*res)["s"].(string); ok {
 		data.Symbol = symbol
@@ -435,10 +416,13 @@ func (u *SpotUserDataBranch) handleTrade(res *map[string]interface{}) {
 	if orderType, ok := (*res)["o"].(string); ok {
 		data.OrderType = orderType
 	}
+	if feeAsset, ok := (*res)["N"].(string); ok {
+		data.FeeAsset = feeAsset
+	}
 	u.insertTrade(&data)
 }
 
-func (u *SpotUserDataBranch) updateAccountData(message *map[string]interface{}) {
+func (u *spotUserDataBranch) updateAccountData(message *map[string]interface{}) {
 	array, ok := (*message)["B"].([]interface{})
 	if !ok {
 		return

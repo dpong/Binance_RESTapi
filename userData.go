@@ -8,7 +8,7 @@ type PutListenKeyOpts struct {
 	ListenKey string `url:"listenKey"`
 }
 
-func (b *Client) GetSwapListenKey() (*ListenKeyResponse, error) {
+func (b *Client) GetPerpListenKey() (*ListenKeyResponse, error) {
 	res, err := b.do("future", http.MethodPost, "fapi/v1/listenKey", nil, false, true)
 	if err != nil {
 		return nil, err
@@ -21,7 +21,7 @@ func (b *Client) GetSwapListenKey() (*ListenKeyResponse, error) {
 	return resp, nil
 }
 
-func (b *Client) PutSwapListenKey(listenKey string) error {
+func (b *Client) PutPerpListenKey(listenKey string) error {
 	opts := PutListenKeyOpts{
 		ListenKey: listenKey,
 	}

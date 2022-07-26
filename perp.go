@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func (b *Client) SwapTransfer(method, asset string, amount float64) (*TransferResponse, error) {
+func (b *Client) PerpTransfer(method, asset string, amount float64) (*TransferResponse, error) {
 	var transfertype int
 	if method == "in" {
 		transfertype = 1
@@ -57,12 +57,12 @@ func (b *Client) FutureTransfer(method, asset string, amount float64) (*Transfer
 	return resp, nil
 }
 
-func (b *Client) SwapBalance() ([]*SwapBalanceResponse, error) {
+func (b *Client) PerpBalance() ([]*PerpBalanceResponse, error) {
 	res, err := b.do("future", http.MethodGet, "fapi/v2/balance", nil, true, false)
 	if err != nil {
 		return nil, err
 	}
-	resp := []*SwapBalanceResponse{}
+	resp := []*PerpBalanceResponse{}
 	err = json.Unmarshal(res, &resp)
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func (b *Client) SwapBalance() ([]*SwapBalanceResponse, error) {
 	return resp, nil
 }
 
-type SwapBalanceResponse struct {
+type PerpBalanceResponse struct {
 	AccountAlias       string `json:"accountAlias"`
 	Asset              string `json:"asset`
 	Balace             string `json:"balance"`
@@ -79,12 +79,12 @@ type SwapBalanceResponse struct {
 	MaxWithdrawAmount  string `json:"maxWithdrawAmount"`
 }
 
-func (b *Client) SwapAccount() (*SwapAccountResponse, error) {
+func (b *Client) PerpAccount() (*PerpAccountResponse, error) {
 	res, err := b.do("future", http.MethodGet, "fapi/v2/account", nil, true, false)
 	if err != nil {
 		return nil, err
 	}
-	resp := &SwapAccountResponse{}
+	resp := &PerpAccountResponse{}
 	err = json.Unmarshal(res, resp)
 	if err != nil {
 		return nil, err
@@ -92,12 +92,12 @@ func (b *Client) SwapAccount() (*SwapAccountResponse, error) {
 	return resp, nil
 }
 
-func (b *Client) SwapPositions() ([]*SwapPositionResponse, error) {
+func (b *Client) PerpPositions() ([]*PerpPositionResponse, error) {
 	res, err := b.do("future", http.MethodGet, "fapi/v2/positionRisk", nil, true, false)
 	if err != nil {
 		return nil, err
 	}
-	resp := []*SwapPositionResponse{}
+	resp := []*PerpPositionResponse{}
 	err = json.Unmarshal(res, &resp)
 	if err != nil {
 		return nil, err
@@ -106,7 +106,7 @@ func (b *Client) SwapPositions() ([]*SwapPositionResponse, error) {
 	return resp, nil
 }
 
-type SwapAccountResponse struct {
+type PerpAccountResponse struct {
 	FeeTier                     int                  `json:"feeTier"`
 	CanTrade                    bool                 `json:"canTrade"`
 	CanDeposit                  bool                 `json:"canDeposit"`
@@ -157,7 +157,7 @@ type PositionsInAccount struct {
 	PositionAmt            string `json:"positionAmt"`
 }
 
-type SwapPositionResponse struct {
+type PerpPositionResponse struct {
 	EntryPrice       string `json:"entryPrice"`
 	MarginType       string `json:"marginType"`
 	IsAutoAddMargin  string `json:"isAutoAddMargin"`
@@ -172,15 +172,15 @@ type SwapPositionResponse struct {
 	PositionSide     string `json:"positionSide"`
 }
 
-func (b *Client) SwapOpenInterest(symbol string) (*SwapOpenInterestResponse, error) {
-	opts := SwapOpenInterestOpts{
+func (b *Client) PerpOpenInterest(symbol string) (*PerpOpenInterestResponse, error) {
+	opts := PerpOpenInterestOpts{
 		Symbol: symbol,
 	}
 	res, err := b.do("future", http.MethodGet, "fapi/v1/openInterest", opts, false, false)
 	if err != nil {
 		return nil, err
 	}
-	resp := &SwapOpenInterestResponse{}
+	resp := &PerpOpenInterestResponse{}
 	err = json.Unmarshal(res, resp)
 	if err != nil {
 		return nil, err
@@ -189,17 +189,17 @@ func (b *Client) SwapOpenInterest(symbol string) (*SwapOpenInterestResponse, err
 	return resp, nil
 }
 
-type SwapOpenInterestOpts struct {
+type PerpOpenInterestOpts struct {
 	Symbol string `url:"symbol"`
 }
 
-type SwapOpenInterestResponse struct {
+type PerpOpenInterestResponse struct {
 	OpenInterest string `json:"openInterest"`
 	Symbol       string `json:"symbol"`
 	Time         int64  `json:"time"`
 }
 
-func (b *Client) SwapNotionalandLeverage() (*[]NotionalandLeverage, error) {
+func (b *Client) PerpNotionalandLeverage() (*[]NotionalandLeverage, error) {
 	res, err := b.do("future", http.MethodGet, "/fapi/v1/leverageBracket", nil, true, false)
 	if err != nil {
 		return nil, err
@@ -227,7 +227,7 @@ type Brackets struct {
 	Cum              float64 `json:"cum"`
 }
 
-func (b *Client) SwapChangeInitialLeverage(symbol string, leverage int) (*ChangeLeverageResponse, error) {
+func (b *Client) PerpChangeInitialLeverage(symbol string, leverage int) (*ChangeLeverageResponse, error) {
 	opts := ChnageLeverageOpts{
 		Symbol:   symbol,
 		Leverage: leverage,
