@@ -323,7 +323,7 @@ type CancelAllPerpOrdersResponse struct {
 	Msg  string `json:"msg"`
 }
 
-func (b *Client) CancelAllSwapOrders(symbol string) (*CancelAllPerpOrdersResponse, error) {
+func (b *Client) CancelAllPerpOrders(symbol string) (*CancelAllPerpOrdersResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	opts := OnlySymbolOpt{
 		Symbol: usymbol,
