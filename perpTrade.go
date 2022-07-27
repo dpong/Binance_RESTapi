@@ -301,7 +301,7 @@ type PerpCurrentOpenOrdersResponse struct {
 	Priceprotect  bool   `json:"priceProtect"`
 }
 
-func (b *Client) GetCurrentSwapOrders(symbol string) ([]PerpCurrentOpenOrdersResponse, error) {
+func (b *Client) GetCurrentPerpOrders(symbol string) ([]PerpCurrentOpenOrdersResponse, error) {
 	usymbol := strings.ToUpper(symbol)
 	opts := OnlySymbolOpt{
 		Symbol: usymbol,
