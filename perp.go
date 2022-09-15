@@ -232,7 +232,7 @@ func (b *Client) PerpChangeInitialLeverage(symbol string, leverage int) (*Change
 		Symbol:   symbol,
 		Leverage: leverage,
 	}
-	res, err := b.do("future", http.MethodPost, "/fapi/v1/leverage", opts, true, false)
+	res, err := b.do("future", http.MethodPost, "fapi/v1/leverage", opts, true, false)
 	if err != nil {
 		return nil, err
 	}
