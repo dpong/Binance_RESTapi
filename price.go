@@ -2,6 +2,26 @@ package bnnapi
 
 import "net/http"
 
+type SymbolPriceOpts struct {
+	Symbol string `url:"symbol"`
+}
+
+func (b *Client) SpotPrice(symbol string) (*SymbolPrice, error) {
+	opts := SymbolPriceOpts{
+		Symbol: symbol,
+	}
+	res, err := b.do("spot", http.MethodGet, "api/v3/ticker/price", opts, false, false)
+	if err != nil {
+		return nil, err
+	}
+
+	price := &SymbolPrice{}
+	if err = json.Unmarshal(res, &price); err != nil {
+		return nil, err
+	}
+	return price, nil
+}
+
 func (b *Client) SpotPrices() ([]*SymbolPrice, error) {
 	res, err := b.do("spot", http.MethodGet, "api/v3/ticker/price", nil, false, false)
 	if err != nil {
