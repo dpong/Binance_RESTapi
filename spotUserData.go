@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +44,28 @@ type TradeData struct {
 	Fee       decimal.Decimal
 	FeeAsset  string
 	TimeStamp time.Time
+}
+
+type SpotAccountSnapShotResponse struct {
+	Code        int    `json:"code"`
+	Msg         string `json:"msg"`
+	SnapshotVos []struct {
+		Data struct {
+			Balances []struct {
+				Asset  string `json:"asset"`
+				Free   string `json:"free"`
+				Locked string `json:"locked"`
+			} `json:"balances"`
+			TotalAssetOfBtc string `json:"totalAssetOfBtc"`
+		} `json:"data"`
+		Type       string `json:"type"`
+		UpdateTime int64  `json:"updateTime"`
+	} `json:"snapshotVos"`
+}
+
+type SpotAccountSnapShotOpts struct {
+	Type      string `url:"type"`
+	TimeStamp int64  `url:"timestamp"`
 }
 
 func (u *Client) CloseSpotUserData() {
@@ -132,6 +155,24 @@ func (c *Client) PutListenKeyHub(product, listenKey string) error {
 		return nil
 	}
 	return errors.New("unsupported product")
+}
+
+func (b *Client) GetSpotAccountSnapshot() (*SpotAccountSnapShotResponse, error) {
+	opts := SpotAccountSnapShotOpts{
+		Type:      "SPOT",
+		TimeStamp: time.Now().UnixMilli(),
+	}
+
+	res, err := b.do("spot", http.MethodGet, "sapi/v1/accountSnapshot", opts, true, false)
+	if err != nil {
+		return nil, err
+	}
+	resp := &SpotAccountSnapShotResponse{}
+	err = json.Unmarshal(res, resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 // internal funcs ------------------------------------------------
