@@ -62,7 +62,7 @@ func (c *Client) do(product, method, path string, data interface{}, sign bool, s
 	}
 	payload := values.Encode()
 	if sign {
-		payload = fmt.Sprintf("%s&timestamp=%v&recvWindow=%d", payload, time.Now().UnixNano()/(1000*1000), c.window)
+		payload = fmt.Sprintf("%s&timestamp=%v&recvWindow=%d", payload, time.Now().UnixMilli(), c.window)
 		mac := hmac.New(sha256.New, []byte(c.secret))
 		_, err = mac.Write([]byte(payload))
 		if err != nil {
