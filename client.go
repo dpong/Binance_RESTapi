@@ -1,6 +1,7 @@
 package bnnapi
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,7 +11,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/google/go-querystring/query"
 	jsoniter "github.com/json-iterator/go"
@@ -137,5 +137,5 @@ func TimeFromUnixTimestampInt(raw interface{}) (time.Time, error) {
 }
 
 func Bytes2String(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
+	return bytes.NewBuffer(b).String()
 }
