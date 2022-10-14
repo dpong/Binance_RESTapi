@@ -267,13 +267,13 @@ func (w *StreamTickerBranch) binanceHandleTickerHub(product string, res *map[str
 func (w *StreamTickerBranch) handleBinanceSpotTicker(res *map[string]interface{}, mainCh *chan map[string]interface{}) error {
 	switch {
 	case (*res)["e"] == "24hrTicker":
-		Timestamp := formatingTimeStamp((*res)["E"].(float64))
-		NowTime := time.Now()
-		if NowTime.After(Timestamp.Add(time.Second*2)) == true {
-			w.outBinanceErr()
-			err := errors.New("websocket data delay more than 2 sec")
-			return err
-		}
+		// Timestamp := formatingTimeStamp((*res)["E"].(float64))
+		// NowTime := time.Now()
+		// if NowTime.After(Timestamp.Add(time.Second*2)) == true {
+		// 	w.outBinanceErr()
+		// 	err := errors.New("websocket data delay more than 2 sec")
+		// 	return err
+		// }
 		if !w.socket.OnErr {
 			*mainCh <- *res
 		}
